@@ -1,0 +1,13 @@
+[gd_scene load_steps=3 format=3 uid="uid://bqm5tr7dart01"]
+
+[ext_resource type="ShaderMaterial" uid="uid://b5x8qm2n7hk4p" path="res://materials/ps1_material.tres" id="1_mat"]
+
+[sub_resource type="CapsuleMesh" id="CapsuleMesh_dart"]
+radius = 0.03
+height = 0.15
+
+[node name="TranqDart" type="Node3D"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+material_override = ExtResource("1_mat")
+mesh = SubResource("CapsuleMesh_dart")

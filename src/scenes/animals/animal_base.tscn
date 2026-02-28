@@ -1,0 +1,25 @@
+[gd_scene load_steps=4 format=3 uid="uid://dny3tv7q1um8w"]
+
+[ext_resource type="Script" path="res://scripts/animals/animal_base.gd" id="1_script"]
+[ext_resource type="ShaderMaterial" uid="uid://b5x8qm2n7hk4p" path="res://materials/ps1_material.tres" id="2_mat"]
+
+[sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
+radius = 0.4
+height = 0.8
+
+[sub_resource type="BoxMesh" id="BoxMesh_body"]
+size = Vector3(1, 0.6, 1.8)
+
+[node name="AnimalBase" type="CharacterBody3D"]
+collision_layer = 4
+collision_mask = 2
+script = ExtResource("1_script")
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+shape = SubResource("CapsuleShape3D_body")
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.3, 0)
+material_override = ExtResource("2_mat")
+mesh = SubResource("BoxMesh_body")
