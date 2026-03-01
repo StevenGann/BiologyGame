@@ -2,14 +2,14 @@ extends Node3D
 ## Spawns trees, rocks, and animals across the terrain at runtime.
 ## Uses a seed for reproducible placement.
 
-@export var tree_count: int = 3000
+@export var tree_count: int = 1000
 @export var rock_count: int = 1000
 @export var animal_count: int = 100
 @export var terrain_half_size: float = 250.0
 @export var spawn_seed: int = 12345
 @export var clear_radius: float = 8.0
 @export var spawn_height_min: float = -5
-@export var spawn_height_max: float = 45
+@export var spawn_height_max: float = 10
 
 @export var tree_scene: PackedScene = preload("res://scenes/props/random_tree.tscn")
 @export var rock_scene: PackedScene = preload("res://scenes/props/random_rock.tscn")
@@ -96,14 +96,14 @@ func _populate_props() -> void:
 	for pos in tree_positions:
 		pos.y = _get_terrain_height_at(pos.x, pos.z)
 		var tree := tree_scene.instantiate() as Node3D
+		tree.position = pos
 		props.add_child(tree)
-		tree.global_position = pos
 
 	for pos in rock_positions:
 		pos.y = _get_terrain_height_at(pos.x, pos.z)
 		var rock := rock_scene.instantiate() as Node3D
+		rock.position = pos
 		props.add_child(rock)
-		rock.global_position = pos
 
 
 func _populate_animals() -> void:
@@ -121,5 +121,5 @@ func _populate_animals() -> void:
 
 		var animal := animal_scene.instantiate() as Node3D
 		pos.y = _get_terrain_height_at(pos.x, pos.z) + 0.3
-		animal.global_position = pos
+		animal.position = pos
 		animals.add_child(animal)

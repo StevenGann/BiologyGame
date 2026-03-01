@@ -1,7 +1,7 @@
 extends Node3D
 ## Terrain with elevation derived from a grayscale image's brightness.
-## Brighter pixels = higher elevation. Builds mesh with baked heights and
-## uses trimesh collision for physics, guaranteeing visual/collision alignment.
+## Brighter pixels = higher elevation. Uses trimesh collision (exact mesh alignment)
+## for physics in both editor and export.
 
 @export var heightmap_path: String = ""
 @export var terrain_size: float = 100.0
@@ -22,14 +22,18 @@ var _terrain_half: float
 
 func _ready() -> void:
 	_setup_heightmap()
+	_height_scale = height_max - height_min
+	_terrain_half = terrain_size * 0.5
 	_build_terrain()
 
 
 func _setup_heightmap() -> void:
-	if heightmap_path.is_empty() or not FileAccess.file_exists(heightmap_path):
+	if heightmap_path.is_empty():
 		_generate_procedural_heightmap()
-	else:
-		_load_heightmap_from_file()
+		return
+	# Use ResourceLoader (not FileAccess.file_exists) so export works: packed resources
+	# are remapped (e.g. PNG -> .ctex) and file_exists can return false incorrectly.
+	_load_heightmap_from_file()
 
 
 func _generate_procedural_heightmap() -> void:
@@ -54,14 +58,18 @@ func _generate_procedural_heightmap() -> void:
 
 
 func _load_heightmap_from_file() -> void:
-	var img := Image.new()
-	var err := img.load(heightmap_path)
-	if err != OK:
+	var tex := ResourceLoader.load(heightmap_path) as Texture2D
+	if not tex:
 		push_error("HeightmapTerrain: Failed to load heightmap: %s" % heightmap_path)
 		_generate_procedural_heightmap()
 		return
 
-	_heightmap_image = img.duplicate()
+	_heightmap_image = tex.get_image()
+	if not _heightmap_image:
+		push_error("HeightmapTerrain: Could not get image from heightmap texture: %s" % heightmap_path)
+		_generate_procedural_heightmap()
+		return
+
 	_heightmap_image.convert(Image.FORMAT_R8)
 	_map_width = _heightmap_image.get_width()
 	_map_depth = _heightmap_image.get_height()
@@ -76,9 +84,6 @@ func _build_terrain() -> void:
 	# Remove existing mesh and collision
 	for child in ground.get_children():
 		child.queue_free()
-
-	_height_scale = height_max - height_min
-	_terrain_half = terrain_size * 0.5
 
 	# Build mesh with baked heights (same geometry for visual and collision)
 	var mesh := _create_terrain_mesh()
@@ -97,11 +102,10 @@ func _build_terrain() -> void:
 		mesh_instance.material_override = mat
 	ground.add_child(mesh_instance)
 
-	# Collision from the same mesh - guarantees exact visual/collision alignment
-	var shape: Shape3D = mesh.create_trimesh_shape()
 	var collision := CollisionShape3D.new()
+	var shape: Shape3D = mesh.create_trimesh_shape()
 	collision.shape = shape
-	ground.add_child(collision)
+	ground.call_deferred("add_child", collision)
 
 
 func _create_terrain_mesh() -> ArrayMesh:

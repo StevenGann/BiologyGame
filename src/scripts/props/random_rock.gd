@@ -2,47 +2,60 @@ extends StaticBody3D
 
 const PS1MaterialBuilder = preload("res://scripts/props/ps1_material_builder.gd")
 
-@export var models_folder: String = "res://assets/models/placeholders/terrain/"
+## Preloaded rock models (DirAccess fails in export, so we preload for reliability).
+const ROCK_MODELS: Array[PackedScene] = [
+	preload("res://assets/models/placeholders/terrain/rock-a.glb"),
+	preload("res://assets/models/placeholders/terrain/rock-b.glb"),
+	preload("res://assets/models/placeholders/terrain/rock-c.glb"),
+	preload("res://assets/models/placeholders/terrain/rock-large.glb"),
+	preload("res://assets/models/placeholders/terrain/rock-small.glb"),
+	preload("res://assets/models/placeholders/terrain/rock-wide.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_largeA.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_largeB.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_largeC.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_largeD.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_largeE.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_largeF.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallA.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallB.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallC.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallD.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallE.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallF.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallG.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallH.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallI.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallFlatA.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallFlatB.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallFlatC.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallTopA.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_smallTopB.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_tallA.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_tallB.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_tallC.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_tallD.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_tallE.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_tallF.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_tallG.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_tallH.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_tallI.glb"),
+	preload("res://assets/models/placeholders/terrain/rock_tallJ.glb"),
+	preload("res://assets/models/placeholders/terrain/rocks-large.glb"),
+	preload("res://assets/models/placeholders/terrain/rocks-medium.glb"),
+	preload("res://assets/models/placeholders/terrain/rocks-small.glb"),
+]
+
 @export var model_scale: float = 2.5
 @export var scale_variation: float = 0.5
 @export var use_ps1_effect: bool = true
 
-var _model_scenes: Array[PackedScene] = []
-
 
 func _ready() -> void:
-	_load_models()
 	_spawn_model()
 
 
-func _load_models() -> void:
-	var dir := DirAccess.open(models_folder)
-	if dir == null:
-		push_error("RandomRock: Cannot open folder: %s" % models_folder)
-		return
-	dir.list_dir_begin()
-	var file := dir.get_next()
-	while file != "":
-		if (file.begins_with("rock") or file.begins_with("rocks")) and file.ends_with(".glb") and not dir.current_is_dir():
-			var scene := load(models_folder.path_join(file)) as PackedScene
-			if scene:
-				_model_scenes.append(scene)
-		file = dir.get_next()
-	dir.list_dir_end()
-
-
 func _apply_ps1_with_original_colors(node: Node) -> void:
-	if node is MeshInstance3D:
-		var mi := node as MeshInstance3D
-		var mesh := mi.mesh
-		if mesh:
-			for surf_idx in mesh.get_surface_count():
-				var orig_mat := mesh.surface_get_material(surf_idx)
-				if orig_mat:
-					var shader_mat := PS1MaterialBuilder.create_from_material(orig_mat)
-					mi.set_surface_override_material(surf_idx, shader_mat)
-	for child in node.get_children():
-		_apply_ps1_with_original_colors(child)
+	PS1MaterialBuilder.apply_to_node(node)
 
 
 func _create_trimesh_collision(model: Node3D) -> void:
@@ -75,16 +88,16 @@ func _collect_mesh_faces(node: Node3D, faces: PackedVector3Array) -> void:
 
 
 func _spawn_model() -> void:
-	if _model_scenes.is_empty():
+	if ROCK_MODELS.is_empty():
 		return
 
 	var pos := global_position
 	var seed_val := int(hash(Vector3i(int(pos.x), int(pos.y), int(pos.z))))
 	seed(seed_val)
-	var idx := randi() % _model_scenes.size()
+	var idx := randi() % ROCK_MODELS.size()
 	var scale_mult := 1.0 + randf_range(-scale_variation, scale_variation)
 
-	var model := _model_scenes[idx].instantiate() as Node3D
+	var model := ROCK_MODELS[idx].instantiate() as Node3D
 	model.scale = Vector3.ONE * model_scale * scale_mult
 	add_child(model)
 	if use_ps1_effect:

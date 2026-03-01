@@ -12,7 +12,7 @@ static func create_from_material(original: Material) -> ShaderMaterial:
 	var albedo_tex: Texture2D = null
 	var albedo_col: Color = Color.WHITE
 
-	if original is BaseMaterial3D:
+	if original and original is BaseMaterial3D:
 		var base := original as BaseMaterial3D
 		albedo_tex = base.albedo_texture
 		albedo_col = base.albedo_color
@@ -42,8 +42,11 @@ static func apply_to_node(node: Node) -> void:
 		if mesh:
 			for surf_idx in mesh.get_surface_count():
 				var orig_mat := mesh.surface_get_material(surf_idx)
+				var shader_mat: ShaderMaterial
 				if orig_mat:
-					var shader_mat := create_from_material(orig_mat)
-					mi.set_surface_override_material(surf_idx, shader_mat)
+					shader_mat = create_from_material(orig_mat)
+				else:
+					shader_mat = create_from_material(null)
+				mi.set_surface_override_material(surf_idx, shader_mat)
 	for child in node.get_children():
 		apply_to_node(child)
