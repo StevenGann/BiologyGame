@@ -11,6 +11,13 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_update_viewport_size)
 
 
+func _input(event: InputEvent) -> void:
+	# Forward input to the SubViewport so the Player (and other game nodes) receive it.
+	var viewport := get_node_or_null("GameViewport") as SubViewport
+	if viewport:
+		viewport.push_input(event)
+
+
 func _setup_posterize() -> void:
 	var viewport := get_node_or_null("GameViewport") as SubViewport
 	var posterize_rect := get_node_or_null("PosterizeLayer/PosterizeRect") as TextureRect
