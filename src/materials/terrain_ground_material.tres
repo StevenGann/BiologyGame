@@ -1,7 +1,7 @@
 [gd_resource type="ShaderMaterial" load_steps=3 format=3]
 
 [ext_resource type="Shader" path="res://shaders/terrain_heightmap.gdshader" id="1_shader"]
-[ext_resource type="Texture2D" path="res://assets/heightmaps/C22W.png" id="2_albedo"]
+[ext_resource type="Texture2D" path="res://assets/heightmaps/yellowstone_color.png" id="2_albedo"]
 
 [resource]
 shader = ExtResource("1_shader")
