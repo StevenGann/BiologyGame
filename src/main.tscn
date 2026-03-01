@@ -9,6 +9,7 @@
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_posterize"]
 shader = ExtResource("6_posterize_shader")
+shader_parameter/grain = 0.06
 shader_parameter/levels = 32
 
 [node name="Main" type="Node"]

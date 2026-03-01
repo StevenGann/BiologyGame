@@ -58,7 +58,7 @@ src/
 ### Adjusting PS1 Aesthetic
 
 - **Shader** (`shaders/ps1_style.gdshader`): Tweak `jitter`, `resolution`, and `affine_mapping` uniforms.
-- **Posterize** (`shaders/posterize.gdshader`): Screen-level color reduction. Lower `levels` (e.g. 16 or 8) for a stronger lo-fi look; default 32 approximates 5-bit color.
+- **Posterize** (`shaders/posterize.gdshader`): Screen-level color reduction and film grain. Lower `levels` (e.g. 16 or 8) for a stronger lo-fi look; default 32 approximates 5-bit color. Adjust `grain` (0–1) for film grain intensity.
 - **Environment** (`environments/ps1_environment.tres`): Adjust `volumetric_fog_density` and `volumetric_fog_length` for fog strength and draw distance.
 - **Materials**: Override `albedo_color` for different surface colors.
 
