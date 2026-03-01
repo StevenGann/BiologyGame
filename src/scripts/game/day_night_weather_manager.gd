@@ -15,15 +15,21 @@ extends Node
 # Weather transitions
 @export var weather_lerp_speed: float = 1.0
 
+# Debug controls (arrow keys)
+@export var debug_arrow_controls: bool = true
+@export var debug_time_step_seconds: float = 30.0
+@export var debug_weather_step: float = 0.15
+
 # Snow particles
-@export var snow_base_amount: int = 8000
+@export var snow_base_amount: int = 100000
 @export var snow_gravity_base: float = -2.0
-@export var snow_wind_strength: float = 4.0
+@export var snow_wind_strength: float = 3.0
 
 # Node refs (siblings under GameViewport)
 var _directional_light: DirectionalLight3D
 var _world_env: WorldEnvironment
 var _snow_particles: GPUParticles3D
+var _snow_collision: GPUParticlesCollisionHeightField3D
 var _player: Node3D
 
 const PHASE_DAWN := 0
@@ -94,11 +100,56 @@ func _process(delta: float) -> void:
 	_update_snow()
 
 
+func _unhandled_input(event: InputEvent) -> void:
+	if not debug_arrow_controls or not event is InputEventKey:
+		return
+	var key_event := event as InputEventKey
+	if not key_event.pressed or key_event.echo:
+		return
+
+	match key_event.keycode:
+		KEY_LEFT:
+			_game_time -= debug_time_step_seconds
+			if _game_time < 0.0:
+				_game_time = fmod(_game_time, day_length_seconds) + day_length_seconds
+			_phase_index = _get_phase_index()
+			_last_phase_index = _phase_index
+			get_viewport().set_input_as_handled()
+		KEY_RIGHT:
+			_game_time += debug_time_step_seconds
+			if _game_time >= day_length_seconds:
+				_game_time = fmod(_game_time, day_length_seconds)
+			_phase_index = _get_phase_index()
+			_last_phase_index = _phase_index
+			get_viewport().set_input_as_handled()
+		KEY_UP:
+			_target_snowfall = clampf(_target_snowfall + debug_weather_step, 0.0, 10.0)
+			_target_wind = clampf(_target_wind + debug_weather_step, 0.0, 10.0)
+			_current_snowfall = _target_snowfall
+			_current_wind = _target_wind
+			get_viewport().set_input_as_handled()
+		KEY_DOWN:
+			_target_snowfall = clampf(_target_snowfall - debug_weather_step, 0.0, 10.0)
+			_target_wind = clampf(_target_wind - debug_weather_step, 0.0, 10.0)
+			_current_snowfall = _target_snowfall
+			_current_wind = _target_wind
+			get_viewport().set_input_as_handled()
+
+
 func _add_snow_particles() -> void:
 	_snow_particles = _create_snow_particles()
 	if _snow_particles:
 		get_parent().add_child(_snow_particles)
 		_snow_process_material = _snow_particles.process_material as ParticleProcessMaterial
+
+	# Collision in World (same branch as terrain) so heightfield samples mesh geometry
+	var world := get_parent().get_node_or_null("World") as Node3D
+	if world:
+		_snow_collision = _create_snow_collision()
+		world.add_child(_snow_collision)
+		# Nudge position to force initial heightfield update (WHEN_MOVED only updates on move)
+		call_deferred("_force_collision_update")
+
 	_update_snow()
 
 
@@ -114,6 +165,7 @@ func _create_snow_particles() -> GPUParticles3D:
 	proc_mat.scale_min = 0.05
 	proc_mat.scale_max = 0.15
 	proc_mat.color = Color(0.95, 0.96, 1.0, 0.9)
+	proc_mat.collision_mode = ParticleProcessMaterial.COLLISION_HIDE_ON_CONTACT
 
 	var quad_mat := StandardMaterial3D.new()
 	quad_mat.albedo_color = Color(0.98, 0.99, 1.0, 0.85)
@@ -136,7 +188,27 @@ func _create_snow_particles() -> GPUParticles3D:
 	# Default visibility_aabb (8x8x8) causes frustum culling when looking forward/down
 	# Use large AABB so snow is always visible around the player
 	particles.visibility_aabb = AABB(Vector3(-200, -100, -200), Vector3(400, 200, 400))
+	# Larger collision radius helps particles detect terrain contact
+	particles.collision_base_size = 0.15
+
 	return particles
+
+
+func _force_collision_update() -> void:
+	if _snow_collision:
+		_snow_collision.position += Vector3(0.01, 0, 0)
+		_snow_collision.position -= Vector3(0.01, 0, 0)
+
+
+func _create_snow_collision() -> GPUParticlesCollisionHeightField3D:
+	var collision := GPUParticlesCollisionHeightField3D.new()
+	collision.name = "SnowParticleCollision"
+	collision.size = Vector3(400, 120, 400)
+	collision.resolution = GPUParticlesCollisionHeightField3D.RESOLUTION_512
+	collision.follow_camera_enabled = true
+	# WHEN_MOVED + follow_camera: updates when camera moves (snow follows player)
+	collision.update_mode = GPUParticlesCollisionHeightField3D.UPDATE_MODE_WHEN_MOVED
+	return collision
 
 
 func _get_phase_index() -> int:
@@ -166,7 +238,8 @@ func _get_sun_angles() -> Vector2:
 func _get_sun_intensity() -> float:
 	var t := _get_normalized_time()
 	var elev_factor := sin(t * TAU)
-	return clampf(elev_factor * 0.5 + 0.5, 0.05, 1.0)
+	# Day: 1.0, dusk/dawn: ~0.5, night: 0.02 (very dim)
+	return clampf(elev_factor * 0.5 + 0.5, 0.02, 1.0)
 
 
 func _get_sun_color() -> Color:
@@ -179,6 +252,64 @@ func _get_sun_color() -> Color:
 	if elev_factor > -0.5:
 		return Color(1.0, 0.6, 0.4).lerp(Color(0.3, 0.4, 0.6), -elev_factor * 2.0)
 	return Color(0.25, 0.3, 0.45)
+
+
+func _get_sky_energy_multiplier() -> float:
+	var t := _get_normalized_time()
+	var elev_factor := sin(t * TAU)
+	# Day: 1.0, dusk/dawn: ~0.5, night: 0.08 (very dim)
+	return clampf(elev_factor * 0.5 + 0.5, 0.08, 1.0)
+
+
+func _get_sky_colors() -> Dictionary:
+	var t := _get_normalized_time()
+	var elev_factor := sin(t * TAU)
+	# Day colors (bright, neutral)
+	var day_top := Color(0.55, 0.6, 0.65)
+	var day_horizon := Color(0.6, 0.65, 0.7)
+	var day_ground := Color(0.3, 0.32, 0.35)
+	var day_ground_horizon := Color(0.4, 0.43, 0.47)
+	# Night colors (dark blue/purple)
+	var night_top := Color(0.02, 0.03, 0.08)
+	var night_horizon := Color(0.05, 0.06, 0.12)
+	var night_ground := Color(0.01, 0.015, 0.03)
+	var night_ground_horizon := Color(0.03, 0.04, 0.08)
+	# Dawn/dusk (warm horizon)
+	var dusk_top := Color(0.25, 0.2, 0.3)
+	var dusk_horizon := Color(0.5, 0.35, 0.4)
+	var dusk_ground := Color(0.15, 0.1, 0.12)
+	var dusk_ground_horizon := Color(0.35, 0.25, 0.28)
+
+	var blend := clampf(elev_factor * 0.5 + 0.5, 0.0, 1.0)  # 0 = night, 1 = day
+	if blend > 0.6:
+		return {
+			"sky_top": day_top,
+			"sky_horizon": day_horizon,
+			"ground_bottom": day_ground,
+			"ground_horizon": day_ground_horizon
+		}
+	if blend > 0.3:
+		var t_dusk := (blend - 0.3) / 0.3
+		return {
+			"sky_top": dusk_top.lerp(day_top, t_dusk),
+			"sky_horizon": dusk_horizon.lerp(day_horizon, t_dusk),
+			"ground_bottom": dusk_ground.lerp(day_ground, t_dusk),
+			"ground_horizon": dusk_ground_horizon.lerp(day_ground_horizon, t_dusk)
+		}
+	if blend > 0.1:
+		var t_night := (blend - 0.1) / 0.2
+		return {
+			"sky_top": night_top.lerp(dusk_top, t_night),
+			"sky_horizon": night_horizon.lerp(dusk_horizon, t_night),
+			"ground_bottom": night_ground.lerp(dusk_ground, t_night),
+			"ground_horizon": night_ground_horizon.lerp(dusk_ground_horizon, t_night)
+		}
+	return {
+		"sky_top": night_top,
+		"sky_horizon": night_horizon,
+		"ground_bottom": night_ground,
+		"ground_horizon": night_ground_horizon
+	}
 
 
 func _update_sun() -> void:
@@ -201,12 +332,22 @@ func _update_sun() -> void:
 	_directional_light.light_energy = _get_sun_intensity()
 	_directional_light.light_color = _get_sun_color()
 
-	# Update ambient via environment
+	# Update ambient and sky via environment
 	if _world_env and _world_env.environment:
 		var env: Environment = _world_env.environment
 		var intensity := _get_sun_intensity()
 		env.ambient_light_energy = lerpf(0.2, 0.6, intensity)
 		env.ambient_light_color = Color(0.5, 0.52, 0.55).lerp(Color(0.2, 0.25, 0.35), 1.0 - intensity)
+
+		# Update procedural sky colors and brightness by time of day
+		if env.sky and env.sky.sky_material is ProceduralSkyMaterial:
+			var sky_mat: ProceduralSkyMaterial = env.sky.sky_material
+			var colors := _get_sky_colors()
+			sky_mat.sky_top_color = colors["sky_top"]
+			sky_mat.sky_horizon_color = colors["sky_horizon"]
+			sky_mat.ground_bottom_color = colors["ground_bottom"]
+			sky_mat.ground_horizon_color = colors["ground_horizon"]
+			sky_mat.sky_energy_multiplier = _get_sky_energy_multiplier()
 
 
 func _update_fog() -> void:
