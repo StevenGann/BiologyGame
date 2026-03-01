@@ -1,4 +1,4 @@
-[gd_scene load_steps=7 format=3 uid="uid://cnyotb0ghrvhi"]
+[gd_scene load_steps=8 format=3 uid="uid://cnyotb0ghrvhi"]
 
 [ext_resource type="Script" path="res://scripts/game/main.gd" id="1_main_script"]
 [ext_resource type="PackedScene" uid="uid://bw2su6o0tp1tz" path="res://scenes/world/world.tscn" id="2_world"]
@@ -6,6 +6,7 @@
 [ext_resource type="PackedScene" uid="uid://eoz4uw8r2vn9sx" path="res://ui/game_ui.tscn" id="4_ui"]
 [ext_resource type="Environment" uid="uid://d3z0so4p9jm6r" path="res://environments/ps1_environment.tres" id="5_env"]
 [ext_resource type="Shader" path="res://shaders/posterize.gdshader" id="6_posterize_shader"]
+[ext_resource type="Script" path="res://scripts/game/day_night_weather_manager.gd" id="7_weather_script"]
 
 [sub_resource type="ShaderMaterial" id="ShaderMaterial_posterize"]
 shader = ExtResource("6_posterize_shader")
@@ -31,6 +32,9 @@ light_color = Color(0.9, 0.88, 0.85, 1)
 
 [node name="Player" parent="GameViewport" instance=ExtResource("3_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 2, 0)
+
+[node name="DayNightWeatherManager" type="Node" parent="GameViewport"]
+script = ExtResource("7_weather_script")
 
 [node name="PosterizeLayer" type="CanvasLayer" parent="."]
 layer = -1
