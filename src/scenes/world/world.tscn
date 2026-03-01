@@ -13,6 +13,3 @@
 
 [node name="WorldPopulator" type="Node3D" parent="."]
 script = ExtResource("2_populator")
-tree_count = 90
-rock_count = 24
-animal_count = 8

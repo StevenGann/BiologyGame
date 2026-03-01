@@ -27,7 +27,7 @@ var _threat_position: Vector3
 func _ready() -> void:
 	health = max_health
 	if use_ps1_effect:
-		_apply_ps1_to_model($Model)
+		PS1MaterialBuilder.apply_to_node($Model)
 	_pick_new_wander_target()
 	_wander_timer = randf_range(wander_pause_min, wander_pause_max)
 
@@ -51,20 +51,6 @@ func take_damage(amount: int) -> void:
 func _defeat() -> void:
 	animal_defeated.emit()
 	queue_free()
-
-
-func _apply_ps1_to_model(node: Node) -> void:
-	if node is MeshInstance3D:
-		var mi := node as MeshInstance3D
-		var mesh := mi.mesh
-		if mesh:
-			for surf_idx in mesh.get_surface_count():
-				var orig_mat := mesh.surface_get_material(surf_idx)
-				if orig_mat:
-					var shader_mat := PS1MaterialBuilder.create_from_material(orig_mat)
-					mi.set_surface_override_material(surf_idx, shader_mat)
-	for child in node.get_children():
-		_apply_ps1_to_model(child)
 
 
 func _update_state(delta: float) -> void:

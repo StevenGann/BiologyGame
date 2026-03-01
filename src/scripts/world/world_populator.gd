@@ -2,12 +2,14 @@ extends Node3D
 ## Spawns trees, rocks, and animals across the terrain at runtime.
 ## Uses a seed for reproducible placement.
 
-@export var tree_count: int = 1000
-@export var rock_count: int = 250
-@export var animal_count: int = 20
-@export var terrain_half_size: float = 50.0
+@export var tree_count: int = 3000
+@export var rock_count: int = 1000
+@export var animal_count: int = 100
+@export var terrain_half_size: float = 250.0
 @export var spawn_seed: int = 12345
 @export var clear_radius: float = 8.0
+@export var spawn_height_min: float = -5
+@export var spawn_height_max: float = 45
 
 @export var tree_scene: PackedScene = preload("res://scenes/props/random_tree.tscn")
 @export var rock_scene: PackedScene = preload("res://scenes/props/random_rock.tscn")
@@ -19,11 +21,18 @@ var _rng: RandomNumberGenerator
 func _ready() -> void:
 	_rng = RandomNumberGenerator.new()
 	_rng.seed = spawn_seed
+	_apply_terrain_bounds()
 
 	if tree_scene and rock_scene:
 		_populate_props()
 	if animal_scene:
 		_populate_animals()
+
+
+func _apply_terrain_bounds() -> void:
+	var terrain := get_parent().get_node_or_null("TestTerrain")
+	if terrain and "terrain_size" in terrain:
+		terrain_half_size = terrain.terrain_size * 0.5
 
 
 func _get_random_position() -> Vector3:
@@ -37,6 +46,17 @@ func _is_clear_of_spawn(pos: Vector3) -> bool:
 	return pos.distance_to(spawn) >= clear_radius
 
 
+func _is_valid_spawn_height(height: float) -> bool:
+	return height >= spawn_height_min and height <= spawn_height_max
+
+
+func _get_terrain_height_at(x: float, z: float) -> float:
+	var terrain := get_parent().get_node_or_null("TestTerrain")
+	if terrain and terrain.has_method("get_height_at"):
+		return terrain.get_height_at(x, z)
+	return 0.0
+
+
 func _populate_props() -> void:
 	var props := get_parent().get_node_or_null("TestTerrain/Props") as Node3D
 	if not props:
@@ -45,33 +65,45 @@ func _populate_props() -> void:
 
 	var positions: Array[Vector3] = []
 	var needed := tree_count + rock_count
-	var max_attempts := needed * 10
+	var max_attempts := needed * 20
 	for i in max_attempts:
 		if positions.size() >= needed:
 			break
 		var pos := _get_random_position()
 		if _is_clear_of_spawn(pos):
-			positions.append(pos)
+			var height := _get_terrain_height_at(pos.x, pos.z)
+			if _is_valid_spawn_height(height):
+				positions.append(pos)
 
-	while positions.size() < needed:
-		positions.append(_get_random_position())
+	var fallback_attempts := 0
+	while positions.size() < needed and fallback_attempts < max_attempts:
+		var pos := _get_random_position()
+		var height := _get_terrain_height_at(pos.x, pos.z)
+		if _is_valid_spawn_height(height):
+			positions.append(pos)
+		fallback_attempts += 1
 
 	var tree_positions: Array[Vector3] = []
 	var rock_positions: Array[Vector3] = []
 	for i in tree_count:
-		tree_positions.append(positions[i])
+		if i < positions.size():
+			tree_positions.append(positions[i])
 	for i in rock_count:
-		rock_positions.append(positions[tree_count + i])
+		var idx := tree_count + i
+		if idx < positions.size():
+			rock_positions.append(positions[idx])
 
 	for pos in tree_positions:
+		pos.y = _get_terrain_height_at(pos.x, pos.z)
 		var tree := tree_scene.instantiate() as Node3D
-		tree.global_position = pos
 		props.add_child(tree)
+		tree.global_position = pos
 
 	for pos in rock_positions:
+		pos.y = _get_terrain_height_at(pos.x, pos.z)
 		var rock := rock_scene.instantiate() as Node3D
-		rock.global_position = pos
 		props.add_child(rock)
+		rock.global_position = pos
 
 
 func _populate_animals() -> void:
@@ -88,6 +120,6 @@ func _populate_animals() -> void:
 			attempts += 1
 
 		var animal := animal_scene.instantiate() as Node3D
-		pos.y = 0.3
+		pos.y = _get_terrain_height_at(pos.x, pos.z) + 0.3
 		animal.global_position = pos
 		animals.add_child(animal)
