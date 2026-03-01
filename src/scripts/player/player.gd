@@ -4,7 +4,7 @@ const SPEED := 5.0
 const JUMP_VELOCITY := 4.5
 const MOUSE_SENSITIVITY := 0.002
 const CAMERA_PITCH_LIMIT := deg_to_rad(89.0)
-const DART_HALF_LENGTH := 0.075
+const DART_OFFSET := 0.08
 
 @onready var camera: Camera3D = $Camera3D
 @onready var raycast: RayCast3D = $Camera3D/RayCast3D
@@ -83,7 +83,7 @@ func shoot() -> void:
 		collider.take_damage(1)
 
 
-func _place_tranq_dart(hit_point: Vector3, hit_normal: Vector3, collider: Node) -> void:
+func _place_tranq_dart(hit_point: Vector3, _hit_normal: Vector3, collider: Node) -> void:
 	var dart := _tranq_dart_scene.instantiate() as Node3D
 	var dart_parent: Node3D
 
@@ -96,6 +96,12 @@ func _place_tranq_dart(hit_point: Vector3, hit_normal: Vector3, collider: Node) 
 			dart_parent = get_tree().current_scene as Node3D
 
 	dart_parent.add_child(dart)
-	dart.global_position = hit_point + hit_normal * DART_HALF_LENGTH
-	var up_hint := Vector3.RIGHT if abs(hit_normal.dot(Vector3.UP)) > 0.99 else Vector3.UP
-	dart.look_at(hit_point + hit_normal, up_hint)
+	var ray_origin := raycast.global_position
+	var dir_toward_player := (ray_origin - hit_point).normalized()
+	dart.global_position = hit_point + dir_toward_player * DART_OFFSET
+	var up_hint: Vector3
+	if abs(dir_toward_player.dot(Vector3.UP)) > 0.99:
+		up_hint = Vector3.FORWARD if abs(dir_toward_player.dot(Vector3.FORWARD)) < 0.99 else Vector3.RIGHT
+	else:
+		up_hint = Vector3.UP
+	dart.global_transform = Transform3D(Basis.looking_at(dir_toward_player, up_hint), dart.global_position)

@@ -1,7 +1,7 @@
-[gd_scene load_steps=4 format=3 uid="uid://bw2su6o0tp1tz"]
+[gd_scene load_steps=5 format=3 uid="uid://bw2su6o0tp1tz"]
 
 [ext_resource type="PackedScene" uid="uid://dq1rt5n9so0sy" path="res://scenes/world/test_terrain.tscn" id="1_terrain"]
-[ext_resource type="PackedScene" uid="uid://dny3tv7q1um8w" path="res://scenes/animals/animal_base.tscn" id="2_animal"]
+[ext_resource type="Script" path="res://scripts/world/world_populator.gd" id="2_populator"]
 
 [node name="World" type="Node3D"]
 
@@ -11,11 +11,8 @@
 
 [node name="Animals" type="Node3D" parent="."]
 
-[node name="Animal1" parent="Animals" instance=ExtResource("2_animal")]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 5, 0.3, 5)
-
-[node name="Animal2" parent="Animals" instance=ExtResource("2_animal")]
-transform = Transform3D(0.866025, 0, 0.5, 0, 1, 0, -0.5, 0, 0.866025, -8, 0.3, 12)
-
-[node name="Animal3" parent="Animals" instance=ExtResource("2_animal")]
-transform = Transform3D(0.5, 0, -0.866025, 0, 1, 0, 0.866025, 0, 0.5, 15, 0.3, -8)
+[node name="WorldPopulator" type="Node3D" parent="."]
+script = ExtResource("2_populator")
+tree_count = 90
+rock_count = 24
+animal_count = 8

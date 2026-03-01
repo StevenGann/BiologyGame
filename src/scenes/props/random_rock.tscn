@@ -1,0 +1,16 @@
+[gd_scene load_steps=3 format=3 uid="uid://c5yl3n9oqr8sx"]
+
+[ext_resource type="Script" path="res://scripts/props/random_rock.gd" id="1_script"]
+
+[sub_resource type="BoxShape3D" id="BoxShape3D_rock"]
+size = Vector3(1.5, 0.8, 1.5)
+
+[node name="RandomRock" type="StaticBody3D"]
+collision_layer = 2
+collision_mask = 0
+script = ExtResource("1_script")
+use_ps1_effect = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+shape = SubResource("BoxShape3D_rock")
