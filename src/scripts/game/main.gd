@@ -12,7 +12,14 @@ func _ready() -> void:
 
 
 func _input(event: InputEvent) -> void:
-	# Forward input to the SubViewport so the Player (and other game nodes) receive it.
+	if event is InputEventKey:
+		var key_event := event as InputEventKey
+		if key_event.pressed and key_event.keycode == KEY_QUOTELEFT:
+			var sim_mgr := get_node_or_null("GameViewport/World/SimulationManager")
+			if sim_mgr and "toggle_debug_mode" in sim_mgr:
+				sim_mgr.toggle_debug_mode()
+				get_viewport().set_input_as_handled()
+				return
 	var viewport := get_node_or_null("GameViewport") as SubViewport
 	if viewport:
 		viewport.push_input(event)

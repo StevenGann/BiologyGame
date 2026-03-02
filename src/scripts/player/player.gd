@@ -1,6 +1,7 @@
 extends CharacterBody3D
 
 const SPEED := 5.0
+const SPEED_BOOST := 10.0  # 500% faster when holding Shift (for testing)
 const JUMP_VELOCITY := 4.5
 const MOUSE_SENSITIVITY := 0.002
 const CAMERA_PITCH_LIMIT := deg_to_rad(89.0)
@@ -44,13 +45,14 @@ func _apply_gravity(delta: float) -> void:
 func _handle_movement() -> void:
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction := (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
+	var speed := SPEED * (SPEED_BOOST if Input.is_key_pressed(KEY_SHIFT) else 1.0)
 
 	if direction:
-		velocity.x = direction.x * SPEED
-		velocity.z = direction.z * SPEED
+		velocity.x = direction.x * speed
+		velocity.z = direction.z * speed
 	else:
-		velocity.x = move_toward(velocity.x, 0, SPEED)
-		velocity.z = move_toward(velocity.z, 0, SPEED)
+		velocity.x = move_toward(velocity.x, 0, speed)
+		velocity.z = move_toward(velocity.z, 0, speed)
 
 
 func _handle_jump() -> void:

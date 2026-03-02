@@ -1,0 +1,21 @@
+[gd_scene load_steps=4 format=3 uid="uid://bqx8km2n4rv1p"]
+
+[ext_resource type="Script" path="res://scripts/plants/plant.gd" id="1_script"]
+[ext_resource type="PackedScene" uid="uid://ct8slu3gvivrt" path="res://assets/models/placeholders/plants/grass.glb" id="2_grass"]
+
+[sub_resource type="CylinderShape3D" id="CylinderShape3D_plant"]
+radius = 0.5
+height = 1.0
+
+[node name="Plant" type="StaticBody3D"]
+collision_layer = 2
+collision_mask = 0
+script = ExtResource("1_script")
+use_ps1_effect = true
+
+[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.5, 0)
+shape = SubResource("CylinderShape3D_plant")
+
+[node name="Model" parent="." instance=ExtResource("2_grass")]
+transform = Transform3D(1.5, 0, 0, 0, 1.5, 0, 0, 0, 1.5, 0, 0, 0)
