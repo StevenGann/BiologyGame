@@ -125,6 +125,8 @@ public partial class FarSimBridge : Node
         var height = _heightmap?.SampleHeight(state.Position.X, state.Position.Z) ?? 0;
         var pos = state.Position;
         pos.Y = height + 0.3f;
+
+        _animalsNode.AddChild(node);
         body.GlobalPosition = pos;
 
         if (node is AnimalBase animal)
@@ -135,8 +137,6 @@ public partial class FarSimBridge : Node
         {
             body.Set("species", state.Species);
         }
-
-        _animalsNode.AddChild(node);
     }
 
     private static bool IsForager(int species)

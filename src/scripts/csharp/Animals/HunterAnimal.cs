@@ -158,38 +158,48 @@ public partial class HunterAnimal : AnimalBase
         };
     }
 
-    protected override void UpdateDebugVisuals(Node sim)
+    protected override void UpdateDebugVisuals(Node sim, bool inClose)
     {
-        base.UpdateDebugVisuals(sim);
+        base.UpdateDebugVisuals(sim, inClose);
         if (_debugMeshInstance == null || sim == null || !sim.Get("debug_mode").AsBool()) return;
         var imesh = _debugMeshInstance.Mesh as ImmediateMesh;
         if (imesh == null) return;
         if (sim.Get("debug_show_hunter_prey_line").AsBool() && _currentTarget != null && GodotObject.IsInstanceValid(_currentTarget))
         {
             var mat = MakeDebugMaterial(new Color(0.9f, 0.2f, 0.2f));
+            var p = ToLocal(_currentTarget.GlobalPosition);
+            var origin = new Vector3(0, DebugVisualYOffset, 0);
+            var preyEnd = new Vector3(p.X, DebugVisualYOffset, p.Z);
             imesh.SurfaceBegin(Mesh.PrimitiveType.Lines, mat);
-            imesh.SurfaceAddVertex(Vector3.Zero);
-            imesh.SurfaceAddVertex(ToLocal(_currentTarget.GlobalPosition));
+            imesh.SurfaceAddVertex(origin);
+            imesh.SurfaceAddVertex(preyEnd);
             imesh.SurfaceEnd();
+            if (inClose)
+                PlaceDebugAnnotation("Prey", "Prey", (origin + preyEnd) * 0.5f);
         }
         if (sim.Get("debug_show_detection_radii").AsBool())
         {
+            var origin = new Vector3(0, DebugVisualYOffset, 0);
             var chaseMat = MakeDebugMaterial(new Color(1.0f, 0.5f, 0.0f));
             imesh.SurfaceBegin(Mesh.PrimitiveType.LineStrip, chaseMat);
             for (var i = 0; i < 25; i++)
             {
                 var a = Mathf.Tau * (float)i / 24.0f;
-                imesh.SurfaceAddVertex(new Vector3(Mathf.Cos(a) * ChaseTriggerRange, 0, Mathf.Sin(a) * ChaseTriggerRange));
+                imesh.SurfaceAddVertex(origin + new Vector3(Mathf.Cos(a) * ChaseTriggerRange, 0, Mathf.Sin(a) * ChaseTriggerRange));
             }
             imesh.SurfaceEnd();
+            if (inClose)
+                PlaceDebugAnnotation("Chase", "Chase Range", origin + new Vector3(ChaseTriggerRange, 0, 0));
             var killMat = MakeDebugMaterial(new Color(1.0f, 0.0f, 0.0f));
             imesh.SurfaceBegin(Mesh.PrimitiveType.LineStrip, killMat);
             for (var i = 0; i < 25; i++)
             {
                 var a = Mathf.Tau * (float)i / 24.0f;
-                imesh.SurfaceAddVertex(new Vector3(Mathf.Cos(a) * KillRange, 0, Mathf.Sin(a) * KillRange));
+                imesh.SurfaceAddVertex(origin + new Vector3(Mathf.Cos(a) * KillRange, 0, Mathf.Sin(a) * KillRange));
             }
             imesh.SurfaceEnd();
+            if (inClose)
+                PlaceDebugAnnotation("Kill", "Kill Range", origin + new Vector3(KillRange, 0, 0));
         }
         _debugMeshInstance.Mesh = imesh;
     }

@@ -160,38 +160,48 @@ public partial class ForagerAnimal : AnimalBase
         };
     }
 
-    protected override void UpdateDebugVisuals(Node sim)
+    protected override void UpdateDebugVisuals(Node sim, bool inClose)
     {
-        base.UpdateDebugVisuals(sim);
+        base.UpdateDebugVisuals(sim, inClose);
         if (_debugMeshInstance == null || sim == null || !sim.Get("debug_mode").AsBool()) return;
         var imesh = _debugMeshInstance.Mesh as ImmediateMesh;
         if (imesh == null) return;
         if (sim.Get("debug_show_forager_plant_line").AsBool() && _currentPlant != null && GodotObject.IsInstanceValid(_currentPlant))
         {
             var mat = MakeDebugMaterial(new Color(1.0f, 0.6f, 0.0f));
+            var p = ToLocal(_currentPlant.GlobalPosition);
+            var origin = new Vector3(0, DebugVisualYOffset, 0);
+            var plantEnd = new Vector3(p.X, DebugVisualYOffset, p.Z);
             imesh.SurfaceBegin(Mesh.PrimitiveType.Lines, mat);
-            imesh.SurfaceAddVertex(Vector3.Zero);
-            imesh.SurfaceAddVertex(ToLocal(_currentPlant.GlobalPosition));
+            imesh.SurfaceAddVertex(origin);
+            imesh.SurfaceAddVertex(plantEnd);
             imesh.SurfaceEnd();
+            if (inClose)
+                PlaceDebugAnnotation("Plant", "Plant", (origin + plantEnd) * 0.5f);
         }
         if (sim.Get("debug_show_detection_radii").AsBool())
         {
+            var origin = new Vector3(0, DebugVisualYOffset, 0);
             var plantMat = MakeDebugMaterial(new Color(0.4f, 0.8f, 0.2f));
             imesh.SurfaceBegin(Mesh.PrimitiveType.LineStrip, plantMat);
             for (var i = 0; i < 25; i++)
             {
                 var a = Mathf.Tau * (float)i / 24.0f;
-                imesh.SurfaceAddVertex(new Vector3(Mathf.Cos(a) * PlantDetectionRange, 0, Mathf.Sin(a) * PlantDetectionRange));
+                imesh.SurfaceAddVertex(origin + new Vector3(Mathf.Cos(a) * PlantDetectionRange, 0, Mathf.Sin(a) * PlantDetectionRange));
             }
             imesh.SurfaceEnd();
+            if (inClose)
+                PlaceDebugAnnotation("PlantRange", "Plant Range", origin + new Vector3(PlantDetectionRange, 0, 0));
             var hunterMat = MakeDebugMaterial(new Color(0.8f, 0.2f, 0.2f));
             imesh.SurfaceBegin(Mesh.PrimitiveType.LineStrip, hunterMat);
             for (var i = 0; i < 25; i++)
             {
                 var a = Mathf.Tau * (float)i / 24.0f;
-                imesh.SurfaceAddVertex(new Vector3(Mathf.Cos(a) * HunterDetectionRange, 0, Mathf.Sin(a) * HunterDetectionRange));
+                imesh.SurfaceAddVertex(origin + new Vector3(Mathf.Cos(a) * HunterDetectionRange, 0, Mathf.Sin(a) * HunterDetectionRange));
             }
             imesh.SurfaceEnd();
+            if (inClose)
+                PlaceDebugAnnotation("HunterRange", "Hunter Range", origin + new Vector3(HunterDetectionRange, 0, 0));
         }
         _debugMeshInstance.Mesh = imesh;
     }

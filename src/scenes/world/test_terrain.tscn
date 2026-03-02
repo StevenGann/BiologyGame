@@ -8,8 +8,8 @@ script = ExtResource("1_script")
 ground_material = ExtResource("2_material")
 heightmap_path = "res://assets/heightmaps/yellowstone_height.png"
 terrain_size = 1000.0
-height_min = -10.0
-height_max = 60.0
+height_min = -1.0
+height_max = 1.0
 
 [node name="Ground" type="StaticBody3D" parent="."]
 collision_layer = 2

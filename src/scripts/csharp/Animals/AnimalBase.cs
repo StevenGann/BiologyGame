@@ -222,49 +222,70 @@ public partial class AnimalBase : CharacterBody3D
 			return;
 		}
 		var cam = GetViewport()?.GetCamera3D();
-		if (cam != null && !cam.IsPositionInFrustum(GlobalPosition))
+		if (cam == null)
 		{
 			_debugLabel.Visible = false;
 			if (_debugMeshInstance != null) _debugMeshInstance.Visible = false;
 			return;
 		}
-		var lod = (int)sim.Call("get_lod_tier", GlobalPosition).AsInt32();
-		if (lod == LODTierFull || lod == LODTierMedium)
-		{
-			_debugLabel.Visible = true;
-			var lodStr = lod == LODTierFull ? "Full" : "Medium";
-			var parts = new Godot.Collections.Array { lodStr };
-			if (sim.Get("debug_show_state").AsBool()) parts.Add(GetDebugStateString());
-			if (sim.Get("debug_show_species").AsBool()) parts.Add(GetDebugSpeciesString());
-			if (sim.Get("debug_show_panic_timer").AsBool() && _state == State.Panicking)
-				parts.Add($"{_panicTimer:F1}s");
-			var strs = new System.Collections.Generic.List<string>();
-			foreach (Variant v in parts) strs.Add(v.AsString());
-			_debugLabel.Text = string.Join(" | ", strs);
-			UpdateDebugVisuals(sim);
-		}
-		else
+		var distSq = cam.GlobalPosition.DistanceSquaredTo(GlobalPosition);
+		var closeSq = 25f;
+		var farSq = 2500f;
+		if (sim.Get("debug_close_radius").VariantType == Variant.Type.Float)
+			closeSq = (float)sim.Get("debug_close_radius").AsDouble();
+		if (sim.Get("debug_far_radius").VariantType == Variant.Type.Float)
+			farSq = (float)sim.Get("debug_far_radius").AsDouble();
+		closeSq *= closeSq;
+		farSq *= farSq;
+		var inClose = distSq <= closeSq;
+		var inFarAndFrustum = distSq <= farSq && cam.IsPositionInFrustum(GlobalPosition);
+		if (!inClose && !inFarAndFrustum)
 		{
 			_debugLabel.Visible = false;
 			if (_debugMeshInstance != null) _debugMeshInstance.Visible = false;
+			HideDebugAnnotations();
+			return;
 		}
+		if (!inClose)
+			HideDebugAnnotations();
+		var lod = (int)sim.Call("get_lod_tier", GlobalPosition).AsInt32();
+		var lodStr = lod == LODTierFull ? "Full" : (lod == LODTierMedium ? "Medium" : "Far");
+		_debugLabel.Visible = true;
+		var parts = new Godot.Collections.Array { lodStr };
+		if (sim.Get("debug_show_state").AsBool()) parts.Add(GetDebugStateString());
+		if (sim.Get("debug_show_species").AsBool()) parts.Add(GetDebugSpeciesString());
+		if (sim.Get("debug_show_panic_timer").AsBool() && _state == State.Panicking)
+			parts.Add($"{_panicTimer:F1}s");
+		var strs = new System.Collections.Generic.List<string>();
+		foreach (Variant v in parts) strs.Add(v.AsString());
+		_debugLabel.Text = string.Join(" | ", strs);
+		if (lod == LODTierFull || lod == LODTierMedium)
+			UpdateDebugVisuals(sim, inClose);
+		else if (_debugMeshInstance != null)
+			_debugMeshInstance.Visible = false;
 	}
 
-	protected virtual void UpdateDebugVisuals(Node sim)
+	protected const float DebugVisualYOffset = 0.5f;
+
+	protected virtual void UpdateDebugVisuals(Node sim, bool inClose)
 	{
 		if (_debugMeshInstance == null || sim == null || !sim.Get("debug_mode").AsBool()) return;
 		_debugMeshInstance.Visible = true;
 		var imesh = new ImmediateMesh();
 		const int segs = 24;
-		var origin = Vector3.Zero;
+		var origin = new Vector3(0, DebugVisualYOffset, 0);
 
 		if (sim.Get("debug_show_threat_line").AsBool() && _state == State.Panicking)
 		{
 			var mat = MakeDebugMaterial(Colors.Red);
+			var t = ToLocal(_threatPosition);
+			var threatEnd = new Vector3(t.X, DebugVisualYOffset, t.Z);
 			imesh.SurfaceBegin(Mesh.PrimitiveType.Lines, mat);
 			imesh.SurfaceAddVertex(origin);
-			imesh.SurfaceAddVertex(ToLocal(_threatPosition));
+			imesh.SurfaceAddVertex(threatEnd);
 			imesh.SurfaceEnd();
+			if (inClose)
+				PlaceDebugAnnotation("Threat", "Threat", (origin + threatEnd) * 0.5f);
 		}
 
 		if (sim.Get("debug_show_cohesion_line").AsBool())
@@ -273,10 +294,14 @@ public partial class AnimalBase : CharacterBody3D
 			if (center != null)
 			{
 				var mat = MakeDebugMaterial(Colors.Green);
+				var c = ToLocal(center.Value);
+				var centerEnd = new Vector3(c.X, DebugVisualYOffset, c.Z);
 				imesh.SurfaceBegin(Mesh.PrimitiveType.Lines, mat);
 				imesh.SurfaceAddVertex(origin);
-				imesh.SurfaceAddVertex(ToLocal(center.Value));
+				imesh.SurfaceAddVertex(centerEnd);
 				imesh.SurfaceEnd();
+				if (inClose)
+					PlaceDebugAnnotation("CohesionLine", "Cohesion", (origin + centerEnd) * 0.5f);
 			}
 		}
 
@@ -290,6 +315,8 @@ public partial class AnimalBase : CharacterBody3D
 				imesh.SurfaceAddVertex(origin + new Vector3(Mathf.Cos(a) * DetectionRange, 0, Mathf.Sin(a) * DetectionRange));
 			}
 			imesh.SurfaceEnd();
+			if (inClose)
+				PlaceDebugAnnotation("Detection", "Detection", origin + new Vector3(DetectionRange, 0, 0));
 			var cohMat = MakeDebugMaterial(Colors.Cyan);
 			imesh.SurfaceBegin(Mesh.PrimitiveType.LineStrip, cohMat);
 			for (var i = 0; i <= segs; i++)
@@ -298,6 +325,8 @@ public partial class AnimalBase : CharacterBody3D
 				imesh.SurfaceAddVertex(origin + new Vector3(Mathf.Cos(a) * CohesionRadius, 0, Mathf.Sin(a) * CohesionRadius));
 			}
 			imesh.SurfaceEnd();
+			if (inClose)
+				PlaceDebugAnnotation("Cohesion", "Cohesion", origin + new Vector3(CohesionRadius, 0, 0));
 		}
 
 		if (sim.Get("debug_show_nearby_species").AsBool())
@@ -315,14 +344,46 @@ public partial class AnimalBase : CharacterBody3D
 				if (distSq < cohRadiusSq && distSq > 0.0001f)
 				{
 					if (!started) { started = true; imesh.SurfaceBegin(Mesh.PrimitiveType.Lines, mat); }
+					var o = ToLocal(other.GlobalPosition);
+					var otherEnd = new Vector3(o.X, DebugVisualYOffset, o.Z);
 					imesh.SurfaceAddVertex(origin);
-					imesh.SurfaceAddVertex(ToLocal(other.GlobalPosition));
+					imesh.SurfaceAddVertex(otherEnd);
 				}
 			}
 			if (started) imesh.SurfaceEnd();
+			if (inClose && started)
+				PlaceDebugAnnotation("Flock", "Flock", origin + new Vector3(CohesionRadius * 0.5f, 0, 0));
 		}
 
 		_debugMeshInstance.Mesh = imesh;
+		if (!inClose)
+			HideDebugAnnotations();
+	}
+
+	private readonly System.Collections.Generic.Dictionary<string, Label3D> _debugAnnotations = new();
+
+	protected void PlaceDebugAnnotation(string id, string text, Vector3 localPos)
+	{
+		if (!_debugAnnotations.TryGetValue(id, out var label))
+		{
+			label = new Label3D
+			{
+				Billboard = BaseMaterial3D.BillboardModeEnum.Enabled,
+				FontSize = 24,
+				Modulate = Colors.White
+			};
+			_debugAnnotations[id] = label;
+			AddChild(label);
+		}
+		label.Position = localPos + new Vector3(0, 2, 0);
+		label.Text = text;
+		label.Visible = true;
+	}
+
+	protected void HideDebugAnnotations()
+	{
+		foreach (var label in _debugAnnotations.Values)
+			label.Visible = false;
 	}
 
 	private static readonly System.Collections.Generic.Dictionary<string, StandardMaterial3D> _debugMaterialCache = new();
@@ -572,6 +633,9 @@ public partial class AnimalBase : CharacterBody3D
 		pos.X += vel.X * d;
 		pos.Z += vel.Z * d;
 		GlobalPosition = pos;
+		var sim = GetSimManager();
+		if (sim != null)
+			UpdateDebugLabel(sim);
 	}
 
 	private AnimalStateData ToStateData()

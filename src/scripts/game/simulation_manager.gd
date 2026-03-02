@@ -30,6 +30,8 @@ var _plants_node: Node = null
 var debug_mode: bool = false
 
 @export_group("Debug Visualizations")
+@export var debug_close_radius: float = 15.0  ## Always show debug within this distance (meters)
+@export var debug_far_radius: float = 50.0  ## Max distance for debug when in view frustum
 @export var debug_show_state: bool = true
 @export var debug_show_species: bool = true
 @export var debug_show_panic_timer: bool = true
