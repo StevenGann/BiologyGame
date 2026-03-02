@@ -221,6 +221,13 @@ public partial class AnimalBase : CharacterBody3D
 			if (_debugMeshInstance != null) _debugMeshInstance.Visible = false;
 			return;
 		}
+		var cam = GetViewport()?.GetCamera3D();
+		if (cam != null && !cam.IsPositionInFrustum(GlobalPosition))
+		{
+			_debugLabel.Visible = false;
+			if (_debugMeshInstance != null) _debugMeshInstance.Visible = false;
+			return;
+		}
 		var lod = (int)sim.Call("get_lod_tier", GlobalPosition).AsInt32();
 		if (lod == LODTierFull || lod == LODTierMedium)
 		{
@@ -318,13 +325,20 @@ public partial class AnimalBase : CharacterBody3D
 		_debugMeshInstance.Mesh = imesh;
 	}
 
+	private static readonly System.Collections.Generic.Dictionary<string, StandardMaterial3D> _debugMaterialCache = new();
+
 	protected static StandardMaterial3D MakeDebugMaterial(Color col)
 	{
-		return new StandardMaterial3D
+		var key = $"{col.R:F2},{col.G:F2},{col.B:F2}";
+		if (_debugMaterialCache.TryGetValue(key, out var cached))
+			return cached;
+		var mat = new StandardMaterial3D
 		{
 			ShadingMode = BaseMaterial3D.ShadingModeEnum.Unshaded,
 			AlbedoColor = col
 		};
+		_debugMaterialCache[key] = mat;
+		return mat;
 	}
 
 	/// <summary>Called by player raycast or hunter. Reduces health and triggers panic from threat position.</summary>

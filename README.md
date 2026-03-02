@@ -1,18 +1,22 @@
 # BiologyGame
 
-A rough prototype for an FPS with RPG elements, set in an open world where the player hunts animals. Built with Godot Engine 4 (.NET) using primarily GDScript.
+An FPS with RPG elements set in an open world where the player hunts animals. Built with **Godot Engine 4.6+** using C# and GDScript. Features PS1-style graphics, a full LOD simulation system, and diverse animal AI (foragers and hunters).
 
 ## Features
 
 - **PS1-style graphics**: Vertex jitter shader, posterize color filter, heavy fog, low-poly aesthetic
 - **FPS controls**: WASD movement, mouse look, jump
-- **Minimal open world**: Flat terrain with placeholder props (trees, rocks)
-- **Animal hunting**: Placeholder animals that can be hit and removed via raycast
+- **Open world**: Heightmap terrain (1000 m), props (trees, rocks), and populated wildlife
+- **Animal hunting**: Tranquilizer darts to capture animals; foragers (Deer, Rabbit, Bison) and hunters (Wolf, Bear) with distinct AI behaviors
+- **LOD simulation**: Spatial grid, three LOD tiers (FULL / MEDIUM / FAR), and async FarAnimalSim for distant animals
+- **Day/night & weather**: Cyclical day phases, dynamic sun/sky, snow, wind, and fog
+- **Plants**: Consumable plants for foragers to eat
 
 ## Requirements
 
 - Godot Engine 4.6+
-- Windows (PC only)
+- .NET 8
+- Windows (D3D12, Jolt Physics)
 
 ## Running the Game
 
@@ -25,46 +29,69 @@ A rough prototype for an FPS with RPG elements, set in an open world where the p
 |--------|-------|
 | Move | W A S D |
 | Jump | Space |
-| Shoot | Left mouse button |
+| Shoot (tranq dart) | Left mouse button |
 | Toggle mouse capture | Escape |
+| Toggle debug overlay | Backtick (`) |
+
+Arrow keys step time and adjust wind/snowfall when debugging (see [World & Environment](docs/world-and-environment.md)).
 
 ## Project Structure
 
 ```
 src/
 ├── main.tscn              # Entry scene
+├── scripts/
+│   ├── game/              # main.gd, simulation_manager.gd, day_night_weather_manager.gd
+│   ├── player/            # FPS controller
+│   ├── animals/           # species_constants.gd
+│   ├── plants/            # plant.gd
+│   ├── world/             # heightmap_terrain.gd, world_populator.gd
+│   ├── props/             # random_tree.gd, random_rock.gd, ps1_material_builder.gd
+│   ├── weapons/           # tranq_dart.gd
+│   └── csharp/            # AnimalBase, ForagerAnimal, HunterAnimal, FarSimBridge, etc.
 ├── scenes/
 │   ├── player/            # FPS controller
-│   ├── world/             # Terrain, props, animals
-│   └── animals/           # Animal base scene
-├── scripts/
-│   ├── player/
-│   ├── animals/
-│   └── game/
-├── shaders/               # PS1-style vertex shader, posterize screen effect
-├── materials/             # ShaderMaterial instances
+│   ├── world/             # Terrain, TestTerrain
+│   ├── animals/           # animal_base, forager_animal, hunter_animal
+│   ├── plants/            # plant
+│   ├── props/             # random_tree, random_rock
+│   └── weapons/           # tranq_dart
+├── shaders/               # ps1_style.gdshader, posterize.gdshader, terrain_heightmap.gdshader
+├── materials/             # Terrain, PS1 ground
 ├── environments/          # Fog, sky, lighting
 └── ui/                    # Crosshair, health bar
 ```
+
+## Documentation
+
+Technical docs are in [`docs/`](docs/):
+
+| Document | Description |
+|----------|-------------|
+| [Architecture](docs/architecture.md) | Scene hierarchy, data flow, GDScript/C# integration |
+| [Simulation](docs/simulation.md) | LOD tiers, spatial grid, FarSimBridge, AnimalLogic |
+| [Animals](docs/animals.md) | Species, ForagerAnimal/HunterAnimal AI, states |
+| [World & Environment](docs/world-and-environment.md) | Terrain, WorldPopulator, day/night, weather, plants |
+| [Player & Combat](docs/player-and-combat.md) | FPS controls, raycast shooting, tranq darts |
+| [Visual Style](docs/visual-style.md) | PS1 shaders, posterize, environment |
 
 ## Extending the Prototype
 
 ### Adding Animals
 
-1. Instance `scenes/animals/animal_base.tscn` in the world.
-2. Set `max_health` in the inspector for tougher animals.
-3. Connect to the `animal_defeated` signal for future XP/loot logic.
+- Use `ForagerAnimal` for plant-eating, hunter-fleeing species; use `HunterAnimal` for predators.
+- Instance `scenes/animals/forager_animal.tscn` or `hunter_animal.tscn` in the world.
+- Configure species in `species_constants.gd` and `AnimalBase.Species` (C#).
+- Connect to `animal_defeated` for XP/loot logic.
 
 ### Adjusting PS1 Aesthetic
 
-- **Shader** (`shaders/ps1_style.gdshader`): Tweak `jitter`, `resolution`, and `affine_mapping` uniforms.
-- **Posterize** (`shaders/posterize.gdshader`): Screen-level color reduction and film grain. Lower `levels` (e.g. 16 or 8) for a stronger lo-fi look; default 32 approximates 5-bit color. Adjust `grain` (0–1) for film grain intensity.
-- **Environment** (`environments/ps1_environment.tres`): Adjust `volumetric_fog_density` and `volumetric_fog_length` for fog strength and draw distance.
-- **Materials**: Override `albedo_color` for different surface colors.
+- **Shader** (`shaders/ps1_style.gdshader`): Tweak `jitter`, `resolution`, `affine_mapping`.
+- **Posterize** (`shaders/posterize.gdshader`): Color levels and film grain.
+- **Environment** (`environments/ps1_environment.tres`): Fog density and draw distance.
+- **Materials**: Override `albedo_color` for surface colors.
 
-### RPG Systems
-
-The health bar in `ui/game_ui.tscn` is a placeholder. Connect it to a future player health system via signals. The `animal_defeated` signal on animals can feed into XP, drops, or quest logic.
+See [Visual Style](docs/visual-style.md) for details.
 
 ## Input Mapping
 
