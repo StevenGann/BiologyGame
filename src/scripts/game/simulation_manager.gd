@@ -6,26 +6,26 @@ const CELL_SIZE: float = 24.0
 
 enum LODTier { FULL, MEDIUM, FAR }
 
-@export var full_sim_radius: float = 30.0
-@export var medium_sim_radius: float = 90.0
+@export var full_sim_radius: float = 50.0  ## Distance threshold for FULL LOD
+@export var medium_sim_radius: float = 200.0  ## Distance threshold for MEDIUM LOD
 
 @export_group("LOD Update Intervals")
-@export var full_ai_interval: int = 30
-@export var full_move_interval: int = 10
+@export var full_ai_interval: int = 30  ## Frames between FULL AI ticks
+@export var full_move_interval: int = 10  ## Frames between FULL movement ticks
 @export var medium_ai_interval: int = 90
 @export var medium_move_interval: int = 30
 @export var far_ai_interval: int = 1500
 @export var far_move_interval: int = 100
 
-var _animal_cells: Dictionary = {}
-var _plant_cells: Dictionary = {}
+var _animal_cells: Dictionary = {}  ## cell_key -> [{n, s, h}, ...] (node, species, is_hunter)
+var _plant_cells: Dictionary = {}  ## cell_key -> [{n}, ...]
 var _frame_counter: int = 0
 var _cached_player: Node3D = null
 var _cached_player_pos: Vector3 = Vector3.ZERO
 var _animals_node: Node = null
 var _plants_node: Node = null
 
-@export var grid_rebuild_interval: int = 4
+@export var grid_rebuild_interval: int = 4  ## Rebuild grid every N physics frames
 
 var debug_mode: bool = false
 
@@ -41,6 +41,7 @@ var debug_mode: bool = false
 @export var debug_show_nearby_species: bool = true
 
 
+## Toggle debug overlays (LOD labels, threat/cohesion lines, radii). Bound to backtick in main.gd.
 func toggle_debug_mode() -> void:
 	debug_mode = not debug_mode
 
@@ -49,7 +50,7 @@ func _ready() -> void:
 	add_to_group("simulation_manager")
 	_animals_node = get_parent().get_node_or_null("Animals")
 	_plants_node = get_parent().get_node_or_null("Plants")
-	set_process_priority(-100)
+	set_process_priority(-100)  ## Run before FarSimBridge (-50) and animals (0)
 
 
 func _physics_process(delta: float) -> void:
@@ -65,6 +66,7 @@ func _physics_process(delta: float) -> void:
 	_process_far_animals(delta)
 
 
+## For FAR LOD animals: disable physics_process, call process_far_tick. Re-enable and snap to terrain when not FAR.
 func _process_far_animals(delta: float) -> void:
 	if not _animals_node:
 		return
@@ -95,6 +97,7 @@ func _process_far_animals(delta: float) -> void:
 			a.set_physics_process(true)
 
 
+## Rebuild _animal_cells and _plant_cells from Animals and Plants node children.
 func _rebuild_grid() -> void:
 	_animal_cells.clear()
 	_plant_cells.clear()
@@ -135,6 +138,7 @@ func _cell_key(pos: Vector3) -> Vector2i:
 	return Vector2i(int(floor(pos.x / CELL_SIZE)), int(floor(pos.z / CELL_SIZE)))
 
 
+## Return cell keys that could contain points within radius of center.
 func _cells_in_radius(center: Vector3, radius: float) -> Array[Vector2i]:
 	var result: Array[Vector2i] = []
 	var cx := int(floor(center.x / CELL_SIZE))
@@ -146,6 +150,7 @@ func _cells_in_radius(center: Vector3, radius: float) -> Array[Vector2i]:
 	return result
 
 
+## Returns all animals within radius. Uses spatial grid; exclude is optional (e.g. self).
 func get_animals_in_radius(center: Vector3, radius: float, exclude: Node = null) -> Array:
 	var result: Array = []
 	var r_sq := radius * radius
@@ -164,6 +169,7 @@ func get_animals_in_radius(center: Vector3, radius: float, exclude: Node = null)
 	return result
 
 
+## Returns animals in "hunters" group within radius.
 func get_hunters_in_radius(center: Vector3, radius: float) -> Array:
 	var result: Array = []
 	var r_sq := radius * radius
@@ -182,6 +188,7 @@ func get_hunters_in_radius(center: Vector3, radius: float) -> Array:
 	return result
 
 
+## Returns animals of given species within radius. Used for cohesion and contagion.
 func get_same_species_in_radius(center: Vector3, radius: float, species: int, exclude: Node = null) -> Array:
 	var result: Array = []
 	var r_sq := radius * radius
@@ -202,6 +209,7 @@ func get_same_species_in_radius(center: Vector3, radius: float, species: int, ex
 	return result
 
 
+## Returns non-consumed plants within radius (is_consumed() must be false).
 func get_plants_in_radius(center: Vector3, radius: float) -> Array:
 	var result: Array = []
 	var r_sq := radius * radius
@@ -220,6 +228,7 @@ func get_plants_in_radius(center: Vector3, radius: float) -> Array:
 	return result
 
 
+## Returns LOD tier based on squared distance from cached player position.
 func get_lod_tier(node_pos: Vector3) -> LODTier:
 	if _cached_player == null or not is_instance_valid(_cached_player):
 		return LODTier.FULL
@@ -233,6 +242,7 @@ func get_lod_tier(node_pos: Vector3) -> LODTier:
 	return LODTier.FAR
 
 
+## Whether AI should tick this frame for given LOD. Uses (frame_counter + instance_id) % interval for staggering.
 func should_ai_tick_this_frame(lod: LODTier, instance_id: int) -> bool:
 	var interval: int
 	match lod:
@@ -247,6 +257,7 @@ func should_ai_tick_this_frame(lod: LODTier, instance_id: int) -> bool:
 	return (_frame_counter + instance_id) % maxi(1, interval) == 0
 
 
+## Whether movement should tick this frame for given LOD.
 func should_movement_tick_this_frame(lod: LODTier, instance_id: int) -> bool:
 	var interval: int
 	match lod:

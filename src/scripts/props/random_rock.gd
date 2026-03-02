@@ -1,8 +1,10 @@
 extends StaticBody3D
+## Placeholder rock prop. On _ready: picks random model from ROCK_MODELS by position-based seed,
+## instantiates with scale variation, applies PS1 effect, builds trimesh collision from mesh.
 
 const PS1MaterialBuilder = preload("res://scripts/props/ps1_material_builder.gd")
 
-## Preloaded rock models (DirAccess fails in export, so we preload for reliability).
+## Preloaded rock models. Preload used because DirAccess can fail in export.
 const ROCK_MODELS: Array[PackedScene] = [
 	preload("res://assets/models/placeholders/terrain/rock-a.glb"),
 	preload("res://assets/models/placeholders/terrain/rock-b.glb"),
@@ -87,6 +89,7 @@ func _collect_mesh_faces(node: Node3D, faces: PackedVector3Array) -> void:
 			_collect_mesh_faces(child as Node3D, faces)
 
 
+## Pick random rock by position-seeded RNG, instantiate, scale, apply PS1, create collision.
 func _spawn_model() -> void:
 	if ROCK_MODELS.is_empty():
 		return

@@ -1,14 +1,16 @@
 extends Node
-## Manages time of day cycle and weather (wind, snowfall, fog).
-## Weather targets change only at phase boundaries (Dawn, Daytime, Dusk, Nighttime).
-## All values interpolate smoothly.
+## Manages time of day cycle (Dawn→Day→Dusk→Night) and weather (wind, snowfall, fog).
+## - Sun position, intensity, color; sky colors; ambient light
+## - Weather targets rolled at phase boundaries; current values lerp toward targets
+## - Snow particles follow player; collision via heightfield
+## - Debug: arrow keys step time and adjust weather
 
 
 # Time of day
-@export var day_length_seconds: float = 600.0
+@export var day_length_seconds: float = 600.0  ## Full cycle duration
 @export var start_time_normalized: float = 0.0  ## 0-1, where 0=dawn
 
-# Fog
+# Fog (density = base + snowfall * multiplier)
 @export var fog_base_min: float = 0.015
 @export var fog_snow_multiplier: float = 0.065
 
@@ -213,7 +215,7 @@ func _create_snow_collision() -> GPUParticlesCollisionHeightField3D:
 
 func _get_phase_index() -> int:
 	var phase_duration := day_length_seconds / 4.0
-	return int(floor(_game_time / phase_duration)) % 4
+	return int(floor(_game_time / phase_duration)) % 4  ## 0=Dawn, 1=Day, 2=Dusk, 3=Night
 
 
 func _roll_weather_targets() -> void:
@@ -379,14 +381,17 @@ func _update_snow() -> void:
 	_snow_process_material.gravity = Vector3(wind_x, snow_gravity_base, wind_z)
 
 
+## Current game time in seconds (0..day_length_seconds).
 func get_game_time() -> float:
 	return _game_time
 
 
+## Phase index: 0=Dawn, 1=Daytime, 2=Dusk, 3=Nighttime.
 func get_phase_index() -> int:
 	return _phase_index
 
 
+## Human-readable phase name.
 func get_phase_name() -> String:
 	match _phase_index:
 		PHASE_DAWN: return "Dawn"

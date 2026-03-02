@@ -8,8 +8,9 @@ using Godot;
 namespace BiologyGame.Simulation;
 
 /// <summary>
-/// Async FAR animal simulation. Runs on a worker thread.
-/// No Godot API calls - pure C# data and logic.
+/// Async FAR animal simulation. Runs on a background worker thread at 20 Hz.
+/// No Godot API calls; uses AnimalStateData, AnimalLogic, FarSpatialGrid, HeightmapSampler.
+/// Demote adds animals; promotion enqueues when within promote radius of player (set by FarSimBridge).
 /// </summary>
 public class FarAnimalSim
 {
@@ -29,26 +30,24 @@ public class FarAnimalSim
     private readonly ConcurrentQueue<(int Index, AnimalStateData State)> _promoteQueue = new();
     private Vector3 _playerPos;
     private float _accumulatedDelta;
+    private readonly float _promoteRadiusSq;
 
-    public FarAnimalSim(HeightmapSampler heightmap)
+    public FarAnimalSim(HeightmapSampler heightmap, float promoteRadius)
     {
         _heightmap = heightmap;
+        _promoteRadiusSq = promoteRadius * promoteRadius;
         _animals = new AnimalStateData[InitialCapacity];
     }
 
     public int Count => _count;
 
-    /// <summary>
-    /// Enqueue an animal to add (demoted from MEDIUM).
-    /// </summary>
+    /// <summary>Enqueue an animal demoted from scene. Worker adds to _animals on next tick.</summary>
     public void Demote(AnimalStateData state)
     {
         _demoteQueue.Enqueue(state);
     }
 
-    /// <summary>
-    /// Try to get next animal to promote. Returns false if none.
-    /// </summary>
+    /// <summary>Dequeue next animal to promote. Main thread polls periodically (e.g. every 20s).</summary>
     public bool TryGetPromote(out int index, out AnimalStateData state)
     {
         if (_promoteQueue.TryDequeue(out var pair))
@@ -80,9 +79,7 @@ public class FarAnimalSim
         }
     }
 
-    /// <summary>
-    /// Push player position and delta from main thread. Called every physics frame.
-    /// </summary>
+    /// <summary>Push player position and accumulated delta. Called every physics frame from FarSimBridge.</summary>
     public void PushInput(Vector3 playerPos, float delta)
     {
         _playerPos = playerPos;
@@ -169,13 +166,12 @@ public class FarAnimalSim
             _animals[i] = state;
         });
 
-        // Promotion check: distance to player < promoteRadius (e.g. 85)
-        const float promoteRadiusSq = 85f * 85f;
+        // Promotion check: distance to player < promote radius
         var toPromote = new List<int>();
         for (var i = 0; i < _count; i++)
         {
             var distSq = _playerPos.DistanceSquaredTo(_animals[i].Position);
-            if (distSq < promoteRadiusSq)
+            if (distSq < _promoteRadiusSq)
             {
                 _promoteQueue.Enqueue((i, _animals[i]));
                 toPromote.Add(i);

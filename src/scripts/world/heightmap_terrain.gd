@@ -1,15 +1,17 @@
 extends Node3D
-## Terrain with elevation derived from a grayscale image's brightness.
-## Brighter pixels = higher elevation. Uses trimesh collision (exact mesh alignment)
-## for physics in both editor and export.
+## Terrain with elevation derived from a grayscale image. Brighter pixels = higher elevation.
+## - Uses trimesh collision (exact mesh alignment) for physics
+## - If heightmap_path empty: generates procedural simplex noise heightmap
+## - Exposes get_height_at(world_x, world_z) for spawning and animal placement
+## - Child "Ground" StaticBody3D holds mesh and collision
 
-@export var heightmap_path: String = ""
-@export var terrain_size: float = 100.0
-@export var height_min: float = -2.0
+@export var heightmap_path: String = ""  ## Empty = procedural noise
+@export var terrain_size: float = 100.0  ## World size (X and Z extent)
+@export var height_min: float = -2.0  ## Elevation range
 @export var height_max: float = 8.0
-@export var resolution: int = 128
+@export var resolution: int = 128  ## Grid resolution for procedural heightmap
 
-@export var ground_material: Material
+@export var ground_material: Material  ## Applied to terrain mesh; heightmap displacement disabled for baked mesh
 
 var _heightmap_image: Image
 var _map_width: int
@@ -27,6 +29,7 @@ func _ready() -> void:
 	_build_terrain()
 
 
+## Load heightmap from file or generate procedural. Sets _heightmap_image, _map_width, _map_depth.
 func _setup_heightmap() -> void:
 	if heightmap_path.is_empty():
 		_generate_procedural_heightmap()
@@ -36,6 +39,7 @@ func _setup_heightmap() -> void:
 	_load_heightmap_from_file()
 
 
+## Generate simplex FBM noise as grayscale image when heightmap_path is empty.
 func _generate_procedural_heightmap() -> void:
 	_map_width = resolution
 	_map_depth = resolution
@@ -57,6 +61,7 @@ func _generate_procedural_heightmap() -> void:
 			_heightmap_image.set_pixel(x, z, Color(n, n, n, 1.0))
 
 
+## Load heightmap image from heightmap_path via ResourceLoader (export-safe).
 func _load_heightmap_from_file() -> void:
 	var tex := ResourceLoader.load(heightmap_path) as Texture2D
 	if not tex:
@@ -75,6 +80,7 @@ func _load_heightmap_from_file() -> void:
 	_map_depth = _heightmap_image.get_height()
 
 
+## Build mesh from _heightmap_image, assign to Ground/MeshInstance3D, create trimesh collision.
 func _build_terrain() -> void:
 	var ground := get_node_or_null("Ground") as StaticBody3D
 	if not ground:
@@ -108,6 +114,7 @@ func _build_terrain() -> void:
 	ground.call_deferred("add_child", collision)
 
 
+## Build ArrayMesh from _heightmap_image: vertices with UV, triangles CCW.
 func _create_terrain_mesh() -> ArrayMesh:
 	var st := SurfaceTool.new()
 	st.begin(Mesh.PRIMITIVE_TRIANGLES)
@@ -149,6 +156,7 @@ func _create_terrain_mesh() -> ArrayMesh:
 	return st.commit()
 
 
+## Sample height at world X,Z. Converts to UV, clamps, samples pixel brightness. Used by SimulationManager, WorldPopulator, HeightmapSampler.
 func get_height_at(world_x: float, world_z: float) -> float:
 	if not _heightmap_image:
 		return 0.0

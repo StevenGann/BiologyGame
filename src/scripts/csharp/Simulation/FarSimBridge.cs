@@ -4,14 +4,19 @@ using BiologyGame.Animals;
 namespace BiologyGame.Simulation;
 
 /// <summary>
-/// Bridges MEDIUM (scene) and FAR (async sim). Demotes animals past demote radius,
-/// promotes animals that re-enter MEDIUM range. Lives in World scene.
+/// Bridges scene-tree animals and FarAnimalSim worker. Radii derived from SimulationManager.medium_sim_radius
+/// +/- HysteresisMeters. DemoteRadius = medium + hysteresis; PromoteRadius = medium - hysteresis.
+/// Runs on main thread; process priority -50 (after SimulationManager).
 /// </summary>
 public partial class FarSimBridge : Node
 {
-    [Export] public float DemoteRadius { get; set; } = 95f;
-    [Export] public float PromoteRadius { get; set; } = 85f;
-    [Export] public float ReviewIntervalSeconds { get; set; } = 20f;
+    /// <summary>Hysteresis (meters) around medium_sim_radius. Demote = medium + hysteresis; Promote = medium - hysteresis.</summary>
+    [Export] public float HysteresisMeters { get; set; } = 10f;
+    /// <summary>How often to drain promotion queue and instantiate animals (seconds).</summary>
+    [Export] public float ReviewIntervalSeconds { get; set; } = 5f;
+
+    private float _demoteRadiusSq;
+    private float _promoteRadius;
 
     private Node3D _animalsNode;
     private Node _terrainNode;
@@ -46,7 +51,15 @@ public partial class FarSimBridge : Node
         if (_terrainNode != null)
             _heightmap.SampleFromTerrain(_terrainNode);
 
-        _sim = new FarAnimalSim(_heightmap);
+        var simManager = GetTree().GetFirstNodeInGroup("simulation_manager");
+        var mediumRadius = 200f;
+        if (simManager != null && simManager.Get("medium_sim_radius").VariantType == Variant.Type.Float)
+            mediumRadius = (float)simManager.Get("medium_sim_radius").AsDouble();
+
+        _demoteRadiusSq = (mediumRadius + HysteresisMeters) * (mediumRadius + HysteresisMeters);
+        _promoteRadius = mediumRadius - HysteresisMeters;
+
+        _sim = new FarAnimalSim(_heightmap, _promoteRadius);
         _sim.Start();
 
         _foragerScene = GD.Load<PackedScene>("res://scenes/animals/forager_animal.tscn");
@@ -69,12 +82,11 @@ public partial class FarSimBridge : Node
         _sim.PushInput(playerPos, (float)delta);
 
         // Demotion: animals past demote radius
-        var demoteRadiusSq = DemoteRadius * DemoteRadius;
         var toRemove = new System.Collections.Generic.List<Node>();
         foreach (Node child in _animalsNode.GetChildren())
         {
             if (child is not CharacterBody3D body) continue;
-            if (playerPos.DistanceSquaredTo(body.GlobalPosition) <= demoteRadiusSq) continue;
+            if (playerPos.DistanceSquaredTo(body.GlobalPosition) <= _demoteRadiusSq) continue;
 
             var state = ToStateData(body);
             if (state.Species >= 0)

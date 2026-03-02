@@ -1,8 +1,10 @@
 extends StaticBody3D
+## Placeholder tree prop. On _ready: picks random model from TREE_MODELS by position-based seed,
+## instantiates with scale variation, applies PS1 effect, builds trimesh collision from mesh.
 
 const PS1MaterialBuilder = preload("res://scripts/props/ps1_material_builder.gd")
 
-## Preloaded tree models (DirAccess fails in export, so we preload for reliability).
+## Preloaded tree models. Preload used because DirAccess can fail in export.
 const TREE_MODELS: Array[PackedScene] = [
 	preload("res://assets/models/placeholders/trees/tree.glb"),
 	preload("res://assets/models/placeholders/trees/tree-autumn.glb"),
@@ -16,7 +18,7 @@ const TREE_MODELS: Array[PackedScene] = [
 ]
 
 @export var model_scale: float = 3.5
-@export var scale_variation: float = 0.5
+@export var scale_variation: float = 0.5  ## Random ± on scale
 @export var use_ps1_effect: bool = true
 
 
@@ -57,6 +59,7 @@ func _collect_mesh_faces(node: Node3D, faces: PackedVector3Array) -> void:
 			_collect_mesh_faces(child as Node3D, faces)
 
 
+## Pick random tree by position-seeded RNG, instantiate, scale, apply PS1, create collision.
 func _spawn_model() -> void:
 	if TREE_MODELS.is_empty():
 		return

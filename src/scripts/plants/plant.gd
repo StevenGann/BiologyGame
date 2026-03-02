@@ -1,8 +1,10 @@
 extends StaticBody3D
-## Minimal Plant type for Forager animals to eat.
-## When consumed, health decrements; when depleted, plant is freed.
+## Consumable plant for ForagerAnimal. Foragers call consume() when eating.
+## - consume() decrements health; returns true while still edible
+## - When health reaches 0: emit plant_depleted, queue_free
+## - is_consumed() returns true when depleted (filtered from spatial queries)
 
-signal plant_depleted
+signal plant_depleted  ## Emitted when health reaches 0 (before queue_free)
 
 @export var max_health: int = 3
 @export var use_ps1_effect: bool = true
@@ -19,7 +21,7 @@ func _ready() -> void:
 		PS1MaterialBuilder.apply_to_node($Model)
 
 
-## Called by Forager when eating. Returns true if plant was consumed (still has health).
+## Called by ForagerAnimal when eating. Decrements health. Returns true if still has health after decrement.
 func consume() -> bool:
 	if health <= 0:
 		return false
@@ -31,5 +33,6 @@ func consume() -> bool:
 	return true
 
 
+## Returns true when health <= 0 (plant no longer available for eating).
 func is_consumed() -> bool:
 	return health <= 0

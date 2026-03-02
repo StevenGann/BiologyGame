@@ -1,7 +1,8 @@
 extends Node
-
-## Ensures the Player and its camera are active when the game starts.
-## Manages posterize post-processing and SubViewport sizing.
+## Entry point for the game. Manages:
+## - GameViewport SubViewport and posterize post-processing
+## - Player camera activation and spawn on terrain
+## - Input routing: backtick toggles SimulationManager debug; other input pushed to GameViewport
 
 
 func _ready() -> void:
@@ -11,6 +12,7 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_update_viewport_size)
 
 
+## Handle backtick for debug toggle; route all other input to GameViewport.
 func _input(event: InputEvent) -> void:
 	if event is InputEventKey:
 		var key_event := event as InputEventKey
@@ -25,6 +27,7 @@ func _input(event: InputEvent) -> void:
 		viewport.push_input(event)
 
 
+## Connect PosterizeRect texture to GameViewport render target.
 func _setup_posterize() -> void:
 	var viewport := get_node_or_null("GameViewport") as SubViewport
 	var posterize_rect := get_node_or_null("PosterizeLayer/PosterizeRect") as TextureRect
@@ -32,12 +35,14 @@ func _setup_posterize() -> void:
 		posterize_rect.texture = viewport.get_texture()
 
 
+## Resize SubViewport to match root viewport visible rect.
 func _update_viewport_size() -> void:
 	var viewport := get_node_or_null("GameViewport") as SubViewport
 	if viewport:
 		viewport.size = get_viewport().get_visible_rect().size
 
 
+## Set Player Camera3D as current; spawn Player on terrain at (0,0) if terrain exists.
 func _ensure_camera() -> void:
 	var game_viewport := get_node_or_null("GameViewport")
 	var player := game_viewport.get_node_or_null("Player") if game_viewport else null

@@ -5,16 +5,20 @@ using Godot;
 namespace BiologyGame.Simulation;
 
 /// <summary>
-/// Pure C# logic for FAR LOD animal behavior. No Godot APIs.
-/// Used by both main-thread AnimalBase (via ProcessFarTick) and async FarAnimalSim.
+/// Pure C# logic for FAR LOD animal behavior. No Godot APIs; safe for worker thread.
+/// Shared by AnimalBase.ProcessFarTick (main thread) and FarAnimalSim (worker thread).
 /// </summary>
 public static class AnimalLogic
 {
     private static readonly Random _rng = new();
 
     /// <summary>
-    /// Update state for FAR LOD: contagion, panic decay, wander target refresh. No threat detection.
+    /// Update state for FAR LOD: contagion (panic spread), panic decay, wander target refresh.
+    /// No threat detection (player/hunter); FAR animals only react to neighboring panicked animals.
     /// </summary>
+    /// <param name="delta">Time step.</param>
+    /// <param name="state">Animal state (modified in place).</param>
+    /// <param name="neighbors">Nearby same-species (position, state 0/1).</param>
     public static void UpdateStateFar(
         float delta,
         ref AnimalStateData state,
@@ -34,8 +38,11 @@ public static class AnimalLogic
     }
 
     /// <summary>
-    /// Apply simple wander or panic movement, including cohesion. Writes to state.Velocity.
+    /// Apply simple wander or panic movement. Writes to state.Velocity. Caller applies velocity to position.
     /// </summary>
+    /// <param name="delta">Time step.</param>
+    /// <param name="state">Animal state (modified in place).</param>
+    /// <param name="cohesionVector">Precomputed cohesion vector (zero if none).</param>
     public static void ApplySimpleWander(
         float delta,
         ref AnimalStateData state,

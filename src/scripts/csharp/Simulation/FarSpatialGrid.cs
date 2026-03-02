@@ -4,16 +4,19 @@ using Godot;
 namespace BiologyGame.Simulation;
 
 /// <summary>
-/// Spatial grid for FAR animal neighbor queries. Cell size matches SimulationManager (24).
+/// Uniform spatial grid for FAR animal neighbor queries. Cell size matches SimulationManager.CELL_SIZE (24).
+/// Used by FarAnimalSim on worker thread for get_same_species_in_radius.
 /// </summary>
 public class FarSpatialGrid
 {
+    /// <summary>Cell size in world units. Must match SimulationManager.CELL_SIZE.</summary>
     public const float CellSize = 24.0f;
 
     private readonly Dictionary<Vector2I, List<int>> _cells = new();
     private AnimalStateData[] _animals;
     private int _count;
 
+    /// <summary>Rebuild grid from current animal array. Call at start of each tick.</summary>
     public void Rebuild(AnimalStateData[] animals, int count)
     {
         _animals = animals;
@@ -32,6 +35,8 @@ public class FarSpatialGrid
         }
     }
 
+    /// <summary>Fill outIndices with animal indices of same species within radius. Clears list first.</summary>
+    /// <param name="excludeId">Index to exclude (e.g. self).</param>
     public void GetSameSpeciesInRadius(Vector3 center, float radius, int species, int excludeId, List<int> outIndices)
     {
         outIndices.Clear();

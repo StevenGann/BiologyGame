@@ -1,6 +1,7 @@
 extends Node3D
-## Spawns trees, rocks, and animals across the terrain at runtime.
-## Uses a seed for reproducible placement.
+## Spawns trees, rocks, animals, and plants across the terrain at runtime.
+## Uses spawn_seed for reproducible placement. Respects clear_radius around origin.
+## Reads terrain bounds and get_height_at from parent's TestTerrain.
 
 const SpeciesConstants = preload("res://scripts/animals/species_constants.gd")
 
@@ -10,10 +11,10 @@ const SpeciesConstants = preload("res://scripts/animals/species_constants.gd")
 @export var forager_count: int = 750
 @export var hunter_count: int = 250
 @export var plant_count: int = 1000
-@export var terrain_half_size: float = 250.0
+@export var terrain_half_size: float = 250.0  ## Overridden from TestTerrain.terrain_size if present
 @export var spawn_seed: int = 12345
-@export var clear_radius: float = 8.0
-@export var spawn_height_min: float = -1000
+@export var clear_radius: float = 8.0  ## No spawn within this distance of (0,0,0)
+@export var spawn_height_min: float = -1000  ## Valid height range for spawn
 @export var spawn_height_max: float = 1000
 
 @export var tree_scene: PackedScene = preload("res://scenes/props/random_tree.tscn")
@@ -38,18 +39,21 @@ func _ready() -> void:
 		_populate_plants()
 
 
+## Set terrain_half_size from TestTerrain.terrain_size if available.
 func _apply_terrain_bounds() -> void:
 	var terrain := get_parent().get_node_or_null("TestTerrain")
 	if terrain and "terrain_size" in terrain:
 		terrain_half_size = terrain.terrain_size * 0.5
 
 
+## Random X,Z within terrain bounds; Y=0 (height applied later).
 func _get_random_position() -> Vector3:
 	var x := _rng.randf_range(-terrain_half_size, terrain_half_size)
 	var z := _rng.randf_range(-terrain_half_size, terrain_half_size)
 	return Vector3(x, 0.0, z)
 
 
+## True if pos is outside clear_radius from origin.
 func _is_clear_of_spawn(pos: Vector3) -> bool:
 	var spawn := Vector3(0.0, 0.0, 0.0)
 	return pos.distance_to(spawn) >= clear_radius
@@ -59,6 +63,7 @@ func _is_valid_spawn_height(height: float) -> bool:
 	return height >= spawn_height_min and height <= spawn_height_max
 
 
+## Get height from TestTerrain.get_height_at or 0 if unavailable.
 func _get_terrain_height_at(x: float, z: float) -> float:
 	var terrain := get_parent().get_node_or_null("TestTerrain")
 	if terrain and terrain.has_method("get_height_at"):
@@ -198,6 +203,7 @@ func _populate_animals() -> void:
 		idx += 1
 
 
+## Instantiate animal scene at pos (Y from terrain + 0.3), set species property, add to container.
 func _spawn_animal_at(container: Node3D, scene: PackedScene, pos: Vector3, species: int) -> void:
 	var animal := scene.instantiate() as Node3D
 	pos.y = _get_terrain_height_at(pos.x, pos.z) + 0.3

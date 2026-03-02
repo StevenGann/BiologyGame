@@ -3,15 +3,20 @@ using Godot;
 namespace BiologyGame.Animals;
 
 /// <summary>
-/// Hunter: wanders, stalks prey, chases and kills when close or target panics.
-/// Mirrors hunter_animal.gd.
+/// Hunter animal: wanders, stalks prey (foragers), chases when prey panics or is close,
+/// and kills when within KillRange. Uses SimulationManager.get_animals_in_radius (excluding hunters).
 /// </summary>
 public partial class HunterAnimal : AnimalBase
 {
+    /// <summary>Speed while stalking prey.</summary>
     [Export] public float StalkSpeed { get; set; } = 1.0f;
+    /// <summary>Speed while chasing prey.</summary>
     [Export] public float ChaseSpeed { get; set; } = 5.0f;
+    /// <summary>Distance to prey that triggers chase (or prey panicking).</summary>
     [Export] public float ChaseTriggerRange { get; set; } = 3.0f;
+    /// <summary>Distance at which kill is applied.</summary>
     [Export] public float KillRange { get; set; } = 1.5f;
+    /// <summary>Damage dealt on kill (effectively lethal).</summary>
     [Export] public int KillDamage { get; set; } = 999;
 
     private enum HunterState

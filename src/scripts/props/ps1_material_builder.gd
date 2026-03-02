@@ -1,10 +1,13 @@
 extends RefCounted
-## Builds a PS1-style ShaderMaterial that preserves the original material's texture and colors.
+## Creates PS1-style ShaderMaterial (vertex jitter, affine mapping). Preserves albedo texture and color.
+## - create_from_material: build ShaderMaterial from BaseMaterial3D or fallback
+## - apply_to_node: recursively replace mesh materials under node with PS1 variant
 
 const PS1_SHADER := preload("res://shaders/ps1_style.gdshader")
 const WHITE_TEXTURE := preload("res://assets/heightmaps/white_1x1.png")
 
 
+## Build PS1 ShaderMaterial from original. Uses albedo_texture/albedo_color or WHITE_TEXTURE if missing.
 static func create_from_material(original: Material) -> ShaderMaterial:
 	var shader_mat := ShaderMaterial.new()
 	shader_mat.shader = PS1_SHADER
@@ -34,7 +37,7 @@ static func create_from_material(original: Material) -> ShaderMaterial:
 	return shader_mat
 
 
-## Applies PS1 effect with original colors to all meshes under the given node.
+## Recursively apply PS1 effect to all MeshInstance3D under node. Replaces surface materials with PS1 variant.
 static func apply_to_node(node: Node) -> void:
 	if node is MeshInstance3D:
 		var mi := node as MeshInstance3D

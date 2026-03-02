@@ -1,11 +1,14 @@
 extends CharacterBody3D
+## FPS player controller. WASD movement, mouse look, jump, shoot raycast.
+## - Shoot: raycast from camera; hit objects with take_damage receive 1 damage; tranq dart placed at hit point
+## - Mouse capture toggled with Escape
 
 const SPEED := 5.0
-const SPEED_BOOST := 10.0  # 500% faster when holding Shift (for testing)
+const SPEED_BOOST := 10.0  ## Speed multiplier when Shift held (testing)
 const JUMP_VELOCITY := 4.5
 const MOUSE_SENSITIVITY := 0.002
 const CAMERA_PITCH_LIMIT := deg_to_rad(89.0)
-const DART_OFFSET := 0.08
+const DART_OFFSET := 0.08  ## Offset from hit point for tranq dart to avoid z-fighting
 
 @onready var camera: Camera3D = $Camera3D
 @onready var raycast: RayCast3D = $Camera3D/RayCast3D
@@ -70,6 +73,7 @@ func _handle_mouse_look(relative: Vector2) -> void:
 		camera.rotation.x = clampf(camera.rotation.x, -CAMERA_PITCH_LIMIT, CAMERA_PITCH_LIMIT)
 
 
+## Raycast from camera; apply damage to collider if has take_damage; place tranq dart.
 func shoot() -> void:
 	raycast.force_raycast_update()
 	if not raycast.is_colliding():
@@ -85,6 +89,7 @@ func shoot() -> void:
 		collider.take_damage(1)
 
 
+## Instantiate tranq dart at hit point. Parent to collider if animal (so dart follows), else World/TranqDarts.
 func _place_tranq_dart(hit_point: Vector3, _hit_normal: Vector3, collider: Node) -> void:
 	var dart := _tranq_dart_scene.instantiate() as Node3D
 	var dart_parent: Node3D

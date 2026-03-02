@@ -3,8 +3,8 @@ using Godot;
 namespace BiologyGame.Simulation;
 
 /// <summary>
-/// Pre-baked height samples for worker thread. Main thread populates via SampleFromTerrain.
-/// Worker uses SampleHeight for movement and promotion.
+/// Pre-baked height grid for worker-thread-safe sampling. Main thread populates via
+/// SampleFromTerrain (calls terrain.get_height_at). Worker uses SampleHeight (no Godot APIs).
 /// </summary>
 public class HeightmapSampler
 {
@@ -16,6 +16,7 @@ public class HeightmapSampler
     private float[,] _heights;
     private float _halfSize;
 
+    /// <summary>Allocate grid. Call before SampleFromTerrain.</summary>
     public void Initialize(int resolution, float terrainSize, float heightMin, float heightMax)
     {
         Resolution = resolution;
@@ -27,8 +28,9 @@ public class HeightmapSampler
     }
 
     /// <summary>
-    /// Call from main thread with terrain node. Samples height at grid points.
+    /// Call from main thread only. Samples terrain.get_height_at at grid points.
     /// </summary>
+    /// <param name="terrainNode">Terrain node with get_height_at(x, z) method.</param>
     public void SampleFromTerrain(Node terrainNode)
     {
         if (_heights == null) return;
@@ -49,7 +51,7 @@ public class HeightmapSampler
     }
 
     /// <summary>
-    /// Sample height at world position. Safe to call from worker thread.
+    /// Sample height at world X,Z. Bilinear-style clamp to grid. Safe from worker thread.
     /// </summary>
     public float SampleHeight(float worldX, float worldZ)
     {

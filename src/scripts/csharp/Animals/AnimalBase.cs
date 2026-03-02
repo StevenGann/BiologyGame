@@ -5,24 +5,31 @@ using BiologyGame.Simulation;
 namespace BiologyGame.Animals;
 
 /// <summary>
-/// Base animal: wanders, panics from threats, contagion/cohesion with same species.
-/// Mirrors animal_base.gd for compatibility with SimulationManager (GDScript).
+/// Base class for all animals. Provides wandering, panic-from-threat, contagion (panic spread),
+/// and cohesion (flocking) behaviors. Integrates with SimulationManager (GDScript) for LOD
+/// and spatial queries. Supports FAR LOD via ProcessFarTick and state export for async sim.
 /// </summary>
 public partial class AnimalBase : CharacterBody3D
 {
+	/// <summary>LOD tier constant: full simulation (&lt; 30m from player).</summary>
 	public const int LODTierFull = 0;
+	/// <summary>LOD tier constant: medium simulation (30–90m).</summary>
 	public const int LODTierMedium = 1;
+	/// <summary>LOD tier constant: far simulation (&gt; 90m).</summary>
 	public const int LODTierFar = 2;
 
+	/// <summary>Emitted when health reaches zero (defeated). Used for XP/loot hooks.</summary>
 	[Signal]
 	public delegate void AnimalDefeatedEventHandler();
 
+	/// <summary>High-level behavior state.</summary>
 	public enum State
 	{
 		Wandering,
 		Panicking
 	}
 
+	/// <summary>Species ID. Must match species_constants.gd for GDScript compatibility.</summary>
 	public enum Species
 	{
 		Bison = 0,
@@ -32,6 +39,7 @@ public partial class AnimalBase : CharacterBody3D
 		Bear = 4
 	}
 
+	/// <summary>Species type. Used for cohesion/contagion and scene instantiation.</summary>
 	[Export] public Species species { get; set; } = Species.Bison;
 	[Export] public bool UsePs1Effect { get; set; } = true;
 	[Export] public int MaxHealth { get; set; } = 2;
@@ -42,15 +50,19 @@ public partial class AnimalBase : CharacterBody3D
 	[Export] public float PanicDuration { get; set; } = 3.0f;
 	[Export] public float WanderPauseMin { get; set; } = 1.0f;
 	[Export] public float WanderPauseMax { get; set; } = 4.0f;
+	/// <summary>0–1. Affects contagion and cohesion strength.</summary>
 	[Export(PropertyHint.Range, "0,1")] public float SocialFactor { get; set; } = 0.5f;
 
 	[ExportGroup("Debug LOD Label")]
 	[Export] public float DebugLabelHeight { get; set; } = 2.5f;
 	[Export] public int DebugLabelFontSize { get; set; } = 72;
+	/// <summary>Radius for cohesion (move toward same-species center).</summary>
 	[Export] public float CohesionRadius { get; set; } = 12.0f;
+	/// <summary>Radius for contagion (panic spread from nearby panicking same-species).</summary>
 	[Export] public float ContagionRadius { get; set; } = 10.0f;
 
 	public int Health { get; set; }
+	/// <summary>True when animal was in FAR LOD last frame (for terrain re-snap on promote).</summary>
 	public bool WasFarLod { get; set; }
 
 	protected State _state = State.Wandering;
@@ -69,6 +81,7 @@ public partial class AnimalBase : CharacterBody3D
 	protected MeshInstance3D _debugMeshInstance;
 	private static readonly RandomNumberGenerator _rng = new();
 
+	/// <summary>True when in Panicking state.</summary>
 	public bool IsPanicking => _state == State.Panicking;
 
 	public override void _Ready()
@@ -314,6 +327,7 @@ public partial class AnimalBase : CharacterBody3D
 		};
 	}
 
+	/// <summary>Called by player raycast or hunter. Reduces health and triggers panic from threat position.</summary>
 	public void TakeDamage(int amount)
 	{
 		Health -= amount;
@@ -329,6 +343,7 @@ public partial class AnimalBase : CharacterBody3D
 		QueueFree();
 	}
 
+	/// <summary>Override in subclasses. Updates threat detection, contagion, and state timers.</summary>
 	protected virtual void UpdateState(float delta)
 	{
 		UpdateThreats(delta);
@@ -345,6 +360,7 @@ public partial class AnimalBase : CharacterBody3D
 		}
 	}
 
+	/// <summary>Override in subclasses. Check for player/hunter and call PanicFromPosition if detected.</summary>
 	protected virtual void UpdateThreats(float delta)
 	{
 		var player = GetPlayer();
@@ -436,6 +452,7 @@ public partial class AnimalBase : CharacterBody3D
 		}
 	}
 
+	/// <summary>Override in subclasses. Applies velocity based on state (wander/panic) and cohesion.</summary>
 	protected virtual void ApplyMovement(float delta)
 	{
 		var cohesion = GetSocialCohesionVector();
@@ -507,9 +524,12 @@ public partial class AnimalBase : CharacterBody3D
 	}
 
 	/// <summary>
-	/// Called by SimulationManager (GDScript) for FAR LOD animals.
-	/// Delegates to AnimalLogic for pure C# simulation (shared with async sim).
+	/// Called by SimulationManager (GDScript) for FAR LOD animals when physics_process is disabled.
+	/// Uses AnimalLogic (no Godot APIs) so logic is shared with FarAnimalSim worker thread.
 	/// </summary>
+	/// <param name="delta">Frame delta.</param>
+	/// <param name="aiTick">Whether to run AI update this frame.</param>
+	/// <param name="moveTick">Whether to run movement this frame.</param>
 	public void ProcessFarTick(double delta, bool aiTick, bool moveTick)
 	{
 		var d = (float)delta;
@@ -594,7 +614,7 @@ public partial class AnimalBase : CharacterBody3D
 	}
 
 	/// <summary>
-	/// Export full state for promote/demote round-trip (FarSimBridge).
+	/// Export full state for demotion to FarAnimalSim. Called by FarSimBridge on main thread.
 	/// </summary>
 	public Simulation.AnimalStateData ExportStateData()
 	{
@@ -602,7 +622,7 @@ public partial class AnimalBase : CharacterBody3D
 	}
 
 	/// <summary>
-	/// Restore state when promoted from FAR sim. Caller sets GlobalPosition (with terrain height).
+	/// Restore state when promoted from FarAnimalSim. Caller must set GlobalPosition with terrain height.
 	/// </summary>
 	public void ApplyStateData(Simulation.AnimalStateData s)
 	{

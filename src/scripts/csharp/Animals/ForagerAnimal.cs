@@ -3,14 +3,18 @@ using Godot;
 namespace BiologyGame.Animals;
 
 /// <summary>
-/// Forager: wanders, eats plants, panics and flees when spotting a hunter.
-/// Mirrors forager_animal.gd.
+/// Forager animal: wanders, seeks and eats plants, panics and flees when a hunter is detected.
+/// Uses SimulationManager.get_plants_in_radius and get_hunters_in_radius for spatial queries.
 /// </summary>
 public partial class ForagerAnimal : AnimalBase
 {
+    /// <summary>Range to detect consumable plants.</summary>
     [Export] public float PlantDetectionRange { get; set; } = 5.0f;
+    /// <summary>Range to detect hunters (triggers panic).</summary>
     [Export] public float HunterDetectionRange { get; set; } = 12.0f;
+    /// <summary>Distance beyond which hunter is considered safe; panic can end.</summary>
     [Export] public float HunterSafeDistance { get; set; } = 20.0f;
+    /// <summary>Seconds per eat cycle before calling plant.consume().</summary>
     [Export] public float EatingDuration { get; set; } = 2.0f;
 
     private enum ForagerState
