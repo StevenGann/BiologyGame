@@ -2,6 +2,8 @@ extends Node3D
 ## Spawns trees, rocks, and animals across the terrain at runtime.
 ## Uses a seed for reproducible placement.
 
+const SpeciesConstants = preload("res://scripts/animals/species_constants.gd")
+
 @export var tree_count: int = 100
 @export var rock_count: int = 100
 @export var animal_count: int = 0
@@ -176,14 +178,14 @@ func _populate_animals() -> void:
 		if idx >= positions.size():
 			break
 		if animal_scene:
-			_spawn_animal_at(animals, animal_scene, positions[idx], AnimalBase.Species.BISON)
+			_spawn_animal_at(animals, animal_scene, positions[idx], SpeciesConstants.Species.BISON)
 		idx += 1
 	for i in forager_count:
 		if idx >= positions.size():
 			break
 		if forager_scene:
 			var sp := _rng.randi() % 3
-			var forager_species: int = [AnimalBase.Species.DEER, AnimalBase.Species.RABBIT, AnimalBase.Species.DEER][sp]
+			var forager_species: int = [SpeciesConstants.Species.DEER, SpeciesConstants.Species.RABBIT, SpeciesConstants.Species.DEER][sp]
 			_spawn_animal_at(animals, forager_scene, positions[idx], forager_species)
 		idx += 1
 	for i in hunter_count:
@@ -191,7 +193,7 @@ func _populate_animals() -> void:
 			break
 		if hunter_scene:
 			var sp := _rng.randi() % 2
-			var hunter_species: int = [AnimalBase.Species.WOLF, AnimalBase.Species.BEAR][sp]
+			var hunter_species: int = [SpeciesConstants.Species.WOLF, SpeciesConstants.Species.BEAR][sp]
 			_spawn_animal_at(animals, hunter_scene, positions[idx], hunter_species)
 		idx += 1
 

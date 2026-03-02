@@ -74,8 +74,10 @@ func _process_far_animals(delta: float) -> void:
 			continue
 		var lod: LODTier = get_lod_tier(a.global_position)
 		if lod == LODTier.FAR:
-			if "_was_far_lod" in a:
-				a._was_far_lod = true
+			if "WasFarLod" in a:
+				a.set("WasFarLod", true)
+			elif "_was_far_lod" in a:
+				a.set("_was_far_lod", true)
 			a.set_physics_process(false)
 			if a.has_method("process_far_tick"):
 				var instance_id: int = a.get_instance_id()
@@ -83,8 +85,10 @@ func _process_far_animals(delta: float) -> void:
 				var move_tick: bool = should_movement_tick_this_frame(lod, instance_id)
 				a.process_far_tick(delta, ai_tick, move_tick)
 		else:
-			if "_was_far_lod" in a and a._was_far_lod:
-				a._was_far_lod = false
+			if "WasFarLod" in a and a.get("WasFarLod"):
+				a.set("WasFarLod", false)
+			elif "_was_far_lod" in a and a.get("_was_far_lod"):
+				a.set("_was_far_lod", false)
 				if terrain and terrain.has_method("get_height_at"):
 					var pos: Vector3 = a.global_position
 					a.global_position.y = terrain.get_height_at(pos.x, pos.z) + 0.3

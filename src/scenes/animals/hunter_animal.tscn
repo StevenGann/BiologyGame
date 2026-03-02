@@ -1,6 +1,6 @@
 [gd_scene load_steps=4 format=3 uid="uid://c3hunter5anim"]
 
-[ext_resource type="Script" path="res://scripts/animals/hunter_animal.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/csharp/Animals/HunterAnimal.cs" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://7tt6qdp4ovx5" path="res://assets/models/placeholders/animals/animal-bison.glb" id="2_bison"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]

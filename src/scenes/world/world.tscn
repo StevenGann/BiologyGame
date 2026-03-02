@@ -1,8 +1,9 @@
-[gd_scene load_steps=6 format=3 uid="uid://bw2su6o0tp1tz"]
+[gd_scene load_steps=7 format=3 uid="uid://bw2su6o0tp1tz"]
 
 [ext_resource type="PackedScene" uid="uid://dq1rt5n9so0sy" path="res://scenes/world/test_terrain.tscn" id="1_terrain"]
 [ext_resource type="Script" path="res://scripts/world/world_populator.gd" id="2_populator"]
 [ext_resource type="Script" path="res://scripts/game/simulation_manager.gd" id="3_sim"]
+[ext_resource type="Script" path="res://scripts/csharp/Simulation/FarSimBridge.cs" id="4_far_bridge"]
 
 [node name="World" type="Node3D"]
 
@@ -16,6 +17,9 @@
 
 [node name="SimulationManager" type="Node" parent="."]
 script = ExtResource("3_sim")
+
+[node name="FarSimBridge" type="Node" parent="."]
+script = ExtResource("4_far_bridge")
 
 [node name="WorldPopulator" type="Node3D" parent="."]
 script = ExtResource("2_populator")

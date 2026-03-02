@@ -1,6 +1,6 @@
 [gd_scene load_steps=4 format=3 uid="uid://c2forager4ani"]
 
-[ext_resource type="Script" path="res://scripts/animals/forager_animal.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/csharp/Animals/ForagerAnimal.cs" id="1_script"]
 [ext_resource type="PackedScene" uid="uid://7tt6qdp4ovx5" path="res://assets/models/placeholders/animals/animal-bison.glb" id="2_bison"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_body"]
