@@ -4,4 +4,11 @@
     <EnableDynamicLoading>true</EnableDynamicLoading>
     <RootNamespace>BiologyGame</RootNamespace>
   </PropertyGroup>
+  <ItemGroup>
+    <!-- Exclude test files from the game project -->
+    <Compile Remove="tests\**" />
+    <Content Remove="tests\**" />
+    <EmbeddedResource Remove="tests\**" />
+    <None Remove="tests\**" />
+  </ItemGroup>
 </Project>

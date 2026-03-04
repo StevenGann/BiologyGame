@@ -1,0 +1,95 @@
+name: Tests
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  unit-tests:
+    name: Unit & Integration Tests
+    runs-on: windows-latest  # Required: Jolt Physics is Windows-only
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8.0
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - name: Install Godot 4.6 (.NET)
+        uses: chickensoft-games/setup-godot@v2
+        with:
+          godot-version: '4.6.0'
+          godot-dotnet: true
+
+      - name: Restore dependencies
+        working-directory: src
+        run: dotnet restore BiologyGame.sln
+
+      - name: Build solution
+        working-directory: src
+        run: dotnet build BiologyGame.sln --configuration Release --no-restore
+
+      - name: Run tests
+        working-directory: src
+        run: |
+          dotnet test tests/BiologyGame.Tests/BiologyGame.Tests.csproj `
+            --configuration Release `
+            --no-build `
+            --verbosity normal `
+            --logger "trx;LogFileName=test-results.trx" `
+            --results-directory ./TestResults `
+            --collect:"XPlat Code Coverage"
+
+      - name: Publish test results
+        uses: dorny/test-reporter@v1
+        if: always()
+        with:
+          name: 'xUnit Test Results'
+          path: 'src/TestResults/*.trx'
+          reporter: 'dotnet-trx'
+
+      - name: Upload coverage reports
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: src/TestResults/**/coverage.cobertura.xml
+          retention-days: 30
+
+  # Optional: Add code coverage percentage to PR
+  coverage-report:
+    name: Coverage Report
+    runs-on: ubuntu-latest
+    needs: unit-tests
+    if: github.event_name == 'pull_request'
+
+    steps:
+      - name: Download coverage artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage
+
+      - name: Code Coverage Summary
+        uses: irongut/CodeCoverageSummary@v1.3.0
+        with:
+          filename: coverage/**/coverage.cobertura.xml
+          badge: true
+          format: markdown
+          hide_branch_rate: false
+          hide_complexity: true
+          indicators: true
+          output: both
+          thresholds: '50 75'
+
+      - name: Add Coverage PR Comment
+        uses: marocchino/sticky-pull-request-comment@v2
+        if: github.event_name == 'pull_request'
+        with:
+          recreate: true
+          path: code-coverage-results.md
