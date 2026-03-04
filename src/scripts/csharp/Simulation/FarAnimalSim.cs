@@ -30,7 +30,7 @@ public class FarAnimalSim
     private readonly ConcurrentQueue<(int Index, AnimalStateData State)> _promoteQueue = new();
     private Vector3 _playerPos;
     private float _accumulatedDelta;
-    private readonly float _promoteRadiusSq;
+    private float _promoteRadiusSq;
 
     // Snapshot for thread-safe position queries (debug minimap)
     private float[] _snapshot = Array.Empty<float>();
@@ -45,6 +45,15 @@ public class FarAnimalSim
     }
 
     public int Count => _count;
+
+    /// <summary>
+    /// Update the promote radius threshold. Called from main thread when dynamic LOD adjusts radii.
+    /// Uses Volatile.Write for thread-safe publication to worker thread.
+    /// </summary>
+    public void UpdatePromoteRadius(float promoteRadius)
+    {
+        Volatile.Write(ref _promoteRadiusSq, promoteRadius * promoteRadius);
+    }
 
     /// <summary>Enqueue an animal demoted from scene. Worker adds to _animals on next tick.</summary>
     public void Demote(AnimalStateData state)
@@ -172,11 +181,13 @@ public class FarAnimalSim
         });
 
         // Promotion check: distance to player < promote radius
+        // Use Volatile.Read for thread-safe access to dynamically updated radius
+        var promoteRadiusSq = Volatile.Read(ref _promoteRadiusSq);
         var toPromote = new List<int>();
         for (var i = 0; i < _count; i++)
         {
             var distSq = _playerPos.DistanceSquaredTo(_animals[i].Position);
-            if (distSq < _promoteRadiusSq)
+            if (distSq < promoteRadiusSq)
             {
                 _promoteQueue.Enqueue((i, _animals[i]));
                 toPromote.Add(i);

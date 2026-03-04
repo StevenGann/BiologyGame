@@ -9,6 +9,16 @@ enum LODTier { FULL, MEDIUM, FAR }
 @export var full_sim_radius: float = 50.0  ## Distance threshold for FULL LOD
 @export var medium_sim_radius: float = 200.0  ## Distance threshold for MEDIUM LOD
 
+@export_group("Dynamic LOD")
+@export var dynamic_lod_enabled: bool = true  ## Opt-in toggle for dynamic radius adjustment
+@export var target_fps: float = 60.0  ## Baseline FPS for scaling
+@export var min_full_sim_radius: float = 20.0  ## Minimum full LOD radius
+@export var min_medium_sim_radius: float = 80.0  ## Minimum medium LOD radius
+@export var radius_adjust_interval: int = 30  ## Frames between recalculations
+@export var radius_smoothing: float = 0.1  ## Lerp factor (lower = smoother)
+
+signal medium_sim_radius_changed(new_radius: float)
+
 @export_group("LOD Update Intervals")
 @export var full_ai_interval: int = 30  ## Frames between FULL AI ticks
 @export var full_move_interval: int = 10  ## Frames between FULL movement ticks
@@ -24,6 +34,12 @@ var _cached_player: Node3D = null
 var _cached_player_pos: Vector3 = Vector3.ZERO
 var _animals_node: Node = null
 var _plants_node: Node = null
+
+# Dynamic LOD internal state
+var _smoothed_fps: float = 60.0
+var _max_full_sim_radius: float = 50.0  ## Captured at _ready, used as scaling ceiling
+var _max_medium_sim_radius: float = 200.0  ## Captured at _ready, used as scaling ceiling
+var _last_emitted_medium_radius: float = 200.0
 
 @export var grid_rebuild_interval: int = 4  ## Rebuild grid every N physics frames
 
@@ -53,6 +69,11 @@ func _ready() -> void:
 	_animals_node = get_parent().get_node_or_null("Animals")
 	_plants_node = get_parent().get_node_or_null("Plants")
 	set_process_priority(-100)  ## Run before FarSimBridge (-50) and animals (0)
+	# Capture initial radii as max values for dynamic LOD scaling
+	_max_full_sim_radius = full_sim_radius
+	_max_medium_sim_radius = medium_sim_radius
+	_last_emitted_medium_radius = medium_sim_radius
+	_smoothed_fps = target_fps
 
 
 func _physics_process(delta: float) -> void:
@@ -66,6 +87,7 @@ func _physics_process(delta: float) -> void:
 	if _frame_counter % grid_rebuild_interval == 0:
 		_rebuild_grid()
 	_process_far_animals(delta)
+	_update_dynamic_lod(delta)
 
 
 ## For FAR LOD animals: disable physics_process, call process_far_tick. Re-enable and snap to terrain when not FAR.
@@ -272,3 +294,33 @@ func should_movement_tick_this_frame(lod: LODTier, instance_id: int) -> bool:
 		_:
 			return true
 	return (_frame_counter + instance_id) % maxi(1, interval) == 0
+
+
+## Update dynamic LOD radii based on framerate.
+func _update_dynamic_lod(delta: float) -> void:
+	if not dynamic_lod_enabled:
+		return
+	
+	# Update EMA of FPS every frame (trivial cost)
+	if delta > 0.0:
+		_smoothed_fps = lerpf(_smoothed_fps, 1.0 / delta, 0.05)
+	
+	# Only recalculate radii every N frames
+	if _frame_counter % radius_adjust_interval != 0:
+		return
+	
+	# Compute scale factor: clamp(smoothed_fps / target_fps, 0.0, 1.0)
+	var scale: float = clampf(_smoothed_fps / target_fps, 0.0, 1.0)
+	
+	# Compute target radii
+	var target_full := maxf(min_full_sim_radius, _max_full_sim_radius * scale)
+	var target_medium := maxf(min_medium_sim_radius, _max_medium_sim_radius * scale)
+	
+	# Smoothly lerp current radii toward targets
+	full_sim_radius = lerpf(full_sim_radius, target_full, radius_smoothing)
+	medium_sim_radius = lerpf(medium_sim_radius, target_medium, radius_smoothing)
+	
+	# Emit signal if medium radius changed significantly (>1 meter)
+	if absf(medium_sim_radius - _last_emitted_medium_radius) > 1.0:
+		_last_emitted_medium_radius = medium_sim_radius
+		medium_sim_radius_changed.emit(medium_sim_radius)

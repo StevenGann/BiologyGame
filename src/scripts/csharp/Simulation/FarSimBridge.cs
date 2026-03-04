@@ -65,6 +65,12 @@ public partial class FarSimBridge : Node
         _foragerScene = GD.Load<PackedScene>("res://scenes/animals/forager_animal.tscn");
         _hunterScene = GD.Load<PackedScene>("res://scenes/animals/hunter_animal.tscn");
 
+        // Subscribe to dynamic LOD radius changes
+        if (simManager != null && simManager.HasSignal("medium_sim_radius_changed"))
+        {
+            simManager.Connect("medium_sim_radius_changed", new Callable(this, nameof(OnMediumRadiusChanged)));
+        }
+
         SetProcessPriority(-50); // After SimulationManager
     }
 
@@ -183,5 +189,16 @@ public partial class FarSimBridge : Node
     {
         var (data, _) = _sim?.GetSnapshot() ?? (System.Array.Empty<float>(), 0);
         return data;
+    }
+
+    /// <summary>
+    /// Handle dynamic LOD radius changes from SimulationManager.
+    /// Recalculates demote/promote thresholds and updates FarAnimalSim.
+    /// </summary>
+    private void OnMediumRadiusChanged(float newRadius)
+    {
+        _demoteRadiusSq = (newRadius + HysteresisMeters) * (newRadius + HysteresisMeters);
+        _promoteRadius = newRadius - HysteresisMeters;
+        _sim?.UpdatePromoteRadius(_promoteRadius);
     }
 }
