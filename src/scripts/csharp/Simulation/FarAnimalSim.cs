@@ -32,6 +32,11 @@ public class FarAnimalSim
     private float _accumulatedDelta;
     private readonly float _promoteRadiusSq;
 
+    // Snapshot for thread-safe position queries (debug minimap)
+    private float[] _snapshot = Array.Empty<float>();
+    private int _snapshotCount;
+    private readonly object _snapshotLock = new();
+
     public FarAnimalSim(HeightmapSampler heightmap, float promoteRadius)
     {
         _heightmap = heightmap;
@@ -179,6 +184,9 @@ public class FarAnimalSim
         }
         if (toPromote.Count > 0)
             RemoveAtIndices(toPromote.ToArray());
+
+        // Update snapshot for debug minimap (thread-safe)
+        UpdateSnapshot();
     }
 
     private Vector3 ComputeCohesion(int index, ref AnimalStateData state)
@@ -206,5 +214,48 @@ public class FarAnimalSim
         toCenter.Y = 0;
         if (toCenter.LengthSquared() < 0.01f) return Vector3.Zero;
         return toCenter.Normalized() * state.SocialFactor * state.WanderSpeed * 0.5f;
+    }
+
+    /// <summary>
+    /// Update snapshot buffer with current animal positions for thread-safe reading.
+    /// Called at end of each tick under normal execution flow.
+    /// </summary>
+    private void UpdateSnapshot()
+    {
+        lock (_snapshotLock)
+        {
+            var requiredSize = _count * 3;
+            if (_snapshot.Length < requiredSize)
+            {
+                _snapshot = new float[Math.Max(requiredSize, InitialCapacity * 3)];
+            }
+
+            for (var i = 0; i < _count; i++)
+            {
+                var offset = i * 3;
+                _snapshot[offset] = _animals[i].Position.X;
+                _snapshot[offset + 1] = _animals[i].Position.Z;
+                _snapshot[offset + 2] = _animals[i].Species;
+            }
+            _snapshotCount = _count;
+        }
+    }
+
+    /// <summary>
+    /// Get a copy of the current snapshot data for thread-safe reading.
+    /// Returns (Data, Count) where Data is packed [x0, z0, species0, x1, z1, species1, ...].
+    /// </summary>
+    public (float[] Data, int Count) GetSnapshot()
+    {
+        lock (_snapshotLock)
+        {
+            if (_snapshotCount == 0)
+                return (Array.Empty<float>(), 0);
+
+            var size = _snapshotCount * 3;
+            var copy = new float[size];
+            Array.Copy(_snapshot, copy, size);
+            return (copy, _snapshotCount);
+        }
     }
 }

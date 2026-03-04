@@ -174,4 +174,14 @@ public partial class FarSimBridge : Node
             WanderRadius = 8f
         };
     }
+
+    /// <summary>
+    /// Get FAR animal snapshot for debug minimap. Returns packed float array [x0, z0, species0, x1, z1, species1, ...].
+    /// Callable from GDScript (float[] marshals to PackedFloat32Array).
+    /// </summary>
+    public float[] GetFarAnimalSnapshot()
+    {
+        var (data, _) = _sim?.GetSnapshot() ?? (System.Array.Empty<float>(), 0);
+        return data;
+    }
 }
