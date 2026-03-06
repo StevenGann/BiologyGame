@@ -1,10 +1,13 @@
-[gd_scene load_steps=8 format=3 uid="uid://bw2su6o0tp1tz"]
+[gd_scene load_steps=12 format=3 uid="uid://bw2su6o0tp1tz"]
 
 [ext_resource type="PackedScene" uid="uid://dq1rt5n9so0sy" path="res://scenes/world/test_terrain.tscn" id="1_terrain"]
 [ext_resource type="Script" path="res://scripts/world/world_populator.gd" id="2_populator"]
 [ext_resource type="Script" path="res://scripts/game/simulation_manager.gd" id="3_sim"]
 [ext_resource type="Script" path="res://scripts/csharp/Simulation/FarSimBridge.cs" id="4_far_bridge"]
-[ext_resource type="Script" path="res://scripts/props/prop_physics_manager.gd" id="5_prop_physics"]
+[ext_resource type="Script" path="res://scripts/world/prop_physics_spawner.gd" id="5_prop_physics_spawner"]
+[ext_resource type="Script" path="res://scripts/world/world_chunk_manager.gd" id="6_chunk_manager"]
+[ext_resource type="Script" path="res://scripts/csharp/Simulation/SimulationManagerBridge.cs" id="7_sim_bridge"]
+[ext_resource type="Script" path="res://scripts/csharp/Animals/AnimalMultimeshRenderer.cs" id="8_animal_mmr"]
 
 [node name="World" type="Node3D"]
 
@@ -12,10 +15,20 @@
 
 [node name="TestTerrain" parent="." instance=ExtResource("1_terrain")]
 
-[node name="PropPhysicsManager" type="Node" parent="."]
-script = ExtResource("5_prop_physics")
+[node name="PropPhysicsSpawner" type="Node" parent="."]
+script = ExtResource("5_prop_physics_spawner")
+
+[node name="WorldChunkManager" type="Node3D" parent="."]
+script = ExtResource("6_chunk_manager")
+physics_spawner = NodePath("../PropPhysicsSpawner")
+
+[node name="SimulationManagerBridge" type="Node" parent="." groups=["sim_bridge"]]
+script = ExtResource("7_sim_bridge")
 
 [node name="Animals" type="Node3D" parent="."]
+
+[node name="AnimalMultimeshRenderer" type="Node3D" parent="Animals"]
+script = ExtResource("8_animal_mmr")
 
 [node name="Plants" type="Node3D" parent="."]
 
