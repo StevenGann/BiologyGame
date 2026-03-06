@@ -168,10 +168,10 @@ public partial class HunterAnimal : AnimalBase
         };
     }
 
-    protected override void UpdateDebugVisuals(Node sim, bool inClose)
+    protected override void UpdateDebugVisuals(Node sim, bool inClose, bool showThreat, bool showCohesion, bool showDetection, bool showNearby)
     {
-        base.UpdateDebugVisuals(sim, inClose);
-        if (_debugMeshInstance == null || sim == null || !sim.Get("debug_mode").AsBool()) return;
+        base.UpdateDebugVisuals(sim, inClose, showThreat, showCohesion, showDetection, showNearby);
+        if (_debugMeshInstance == null || sim == null) return;
         var imesh = _debugMeshInstance.Mesh as ImmediateMesh;
         if (imesh == null) return;
         if (sim.Get("debug_show_hunter_prey_line").AsBool() && _currentTarget != null && GodotObject.IsInstanceValid(_currentTarget))

@@ -337,7 +337,10 @@ public partial class AnimalBase : CharacterBody3D
 					_accumulatedMoveDelta = 0;
 				}
 			}
-			UpdateDebugLabel(sim);
+			// Throttle: only run debug overlay for 1/N of animals each frame (staggered by instance id)
+			var frame = (int)GetTree().GetFrame();
+			if ((frame + _cachedInstanceId) % DebugUpdateInterval == 0)
+				UpdateDebugLabel(sim);
 		}
 		else
 		{
@@ -351,6 +354,8 @@ public partial class AnimalBase : CharacterBody3D
 
 		MoveAndSlide();
 	}
+
+	private const int DebugUpdateInterval = 30; // Only run debug overlay for each animal every N frames (staggered)
 
 	private void UpdateDebugLabel(Node sim)
 	{
@@ -391,7 +396,6 @@ public partial class AnimalBase : CharacterBody3D
 			HideDebugAnnotations();
 		var lod = (int)sim.Call("get_lod_tier", GlobalPosition).AsInt32();
 		var lodStr = lod == LODTierFull ? "Full" : (lod == LODTierMedium ? "Medium" : "Far");
-		_debugLabel.Visible = true;
 		var parts = new Godot.Collections.Array { lodStr };
 		if (sim.Get("debug_show_state").AsBool()) parts.Add(GetDebugStateString());
 		if (sim.Get("debug_show_species").AsBool()) parts.Add(GetDebugSpeciesString());
@@ -400,23 +404,28 @@ public partial class AnimalBase : CharacterBody3D
 		var strs = new System.Collections.Generic.List<string>();
 		foreach (Variant v in parts) strs.Add(v.AsString());
 		_debugLabel.Text = string.Join(" | ", strs);
+		_debugLabel.Visible = true;
+		var showThreat = sim.Get("debug_show_threat_line").AsBool();
+		var showCohesion = sim.Get("debug_show_cohesion_line").AsBool();
+		var showDetection = sim.Get("debug_show_detection_radii").AsBool();
+		var showNearby = sim.Get("debug_show_nearby_species").AsBool();
 		if (lod == LODTierFull || lod == LODTierMedium)
-			UpdateDebugVisuals(sim, inClose);
+			UpdateDebugVisuals(sim, inClose, showThreat, showCohesion, showDetection, showNearby);
 		else if (_debugMeshInstance != null)
 			_debugMeshInstance.Visible = false;
 	}
 
 	protected const float DebugVisualYOffset = 0.5f;
 
-	protected virtual void UpdateDebugVisuals(Node sim, bool inClose)
+	protected virtual void UpdateDebugVisuals(Node sim, bool inClose, bool showThreat, bool showCohesion, bool showDetection, bool showNearby)
 	{
-		if (_debugMeshInstance == null || sim == null || !sim.Get("debug_mode").AsBool()) return;
+		if (_debugMeshInstance == null) return;
 		_debugMeshInstance.Visible = true;
 		var imesh = new ImmediateMesh();
-		const int segs = 24;
+		var segs = inClose ? 24 : 12; // Fewer segments when farther to reduce mesh cost
 		var origin = new Vector3(0, DebugVisualYOffset, 0);
 
-		if (sim.Get("debug_show_threat_line").AsBool() && _state == State.Panicking)
+		if (showThreat && _state == State.Panicking)
 		{
 			var mat = MakeDebugMaterial(Colors.Red);
 			var t = ToLocal(_threatPosition);
@@ -429,7 +438,8 @@ public partial class AnimalBase : CharacterBody3D
 				PlaceDebugAnnotation("Threat", "Threat", (origin + threatEnd) * 0.5f);
 		}
 
-		if (sim.Get("debug_show_cohesion_line").AsBool())
+		// Cohesion line and flock lines use GetNearbySameSpecies/GetCohesionCenter — only when inClose to avoid heavy spatial queries
+		if (showCohesion && inClose)
 		{
 			var center = GetCohesionCenter();
 			if (center != null)
@@ -441,12 +451,11 @@ public partial class AnimalBase : CharacterBody3D
 				imesh.SurfaceAddVertex(origin);
 				imesh.SurfaceAddVertex(centerEnd);
 				imesh.SurfaceEnd();
-				if (inClose)
-					PlaceDebugAnnotation("CohesionLine", "Cohesion", (origin + centerEnd) * 0.5f);
+				PlaceDebugAnnotation("CohesionLine", "Cohesion", (origin + centerEnd) * 0.5f);
 			}
 		}
 
-		if (sim.Get("debug_show_detection_radii").AsBool())
+		if (showDetection)
 		{
 			var detMat = MakeDebugMaterial(Colors.Yellow);
 			imesh.SurfaceBegin(Mesh.PrimitiveType.LineStrip, detMat);
@@ -470,7 +479,7 @@ public partial class AnimalBase : CharacterBody3D
 				PlaceDebugAnnotation("Cohesion", "Cohesion", origin + new Vector3(CohesionRadius, 0, 0));
 		}
 
-		if (sim.Get("debug_show_nearby_species").AsBool())
+		if (showNearby && inClose)
 		{
 			var nearby = GetNearbySameSpecies();
 			var cohRadiusSq = CohesionRadius * CohesionRadius;
@@ -492,7 +501,7 @@ public partial class AnimalBase : CharacterBody3D
 				}
 			}
 			if (started) imesh.SurfaceEnd();
-			if (inClose && started)
+			if (started)
 				PlaceDebugAnnotation("Flock", "Flock", origin + new Vector3(CohesionRadius * 0.5f, 0, 0));
 		}
 
@@ -778,7 +787,11 @@ public partial class AnimalBase : CharacterBody3D
 		GlobalPosition = pos;
 		var sim = GetSimManager();
 		if (sim != null)
-			UpdateDebugLabel(sim);
+		{
+			var frame = (int)GetTree().GetFrame();
+			if ((frame + _cachedInstanceId) % DebugUpdateInterval == 0)
+				UpdateDebugLabel(sim);
+		}
 	}
 
 	private AnimalStateData ToStateData()

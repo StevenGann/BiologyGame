@@ -8,6 +8,7 @@ extends Control
 @export var dot_size: float = 3.0  ## Size of animal dots
 @export var player_dot_size: float = 5.0  ## Size of player dot
 @export var border_width: float = 2.0  ## Width of the outline border
+@export var redraw_interval: int = 3  ## Redraw every N frames (3 = ~20 FPS). Higher = better performance.
 
 @export_group("Colors")
 @export var border_color: Color = Color.WHITE
@@ -68,8 +69,8 @@ func _process(_delta: float) -> void:
 		if visible != should_show:
 			visible = should_show
 
-	# Redraw every frame when visible
-	if visible:
+	# Throttle redraws: minimap doesn't need 60 FPS
+	if visible and Engine.get_process_frames() % maxi(1, redraw_interval) == 0:
 		queue_redraw()
 
 
@@ -99,6 +100,16 @@ func _draw_animals() -> void:
 	if not _animals_node or not _sim_manager:
 		return
 
+	# Cache player position and radii once per redraw (avoids N get_lod_tier calls)
+	var player_pos: Vector3 = _player.global_position if _player and is_instance_valid(_player) else Vector3.ZERO
+	var full_sq: float = 0.0
+	var med_sq: float = 0.0
+	if "full_sim_radius" in _sim_manager and "medium_sim_radius" in _sim_manager:
+		var r1: float = _sim_manager.full_sim_radius
+		var r2: float = _sim_manager.medium_sim_radius
+		full_sq = r1 * r1
+		med_sq = r2 * r2
+
 	for animal in _animals_node.get_children():
 		if not is_instance_valid(animal) or not animal is Node3D:
 			continue
@@ -106,17 +117,16 @@ func _draw_animals() -> void:
 		var world_pos: Vector3 = animal.global_position
 		var map_pos: Vector2 = _world_to_map(world_pos)
 
-		# Determine LOD tier for color
+		# Compute LOD locally (avoids per-animal GDScript get_lod_tier call)
 		var color: Color = full_lod_color
-		if _sim_manager.has_method("get_lod_tier"):
-			var lod: int = _sim_manager.get_lod_tier(world_pos)
-			match lod:
-				0:  # FULL
-					color = full_lod_color
-				1:  # MEDIUM
-					color = medium_lod_color
-				2:  # FAR
-					color = far_lod_color
+		if full_sq > 0.0 and med_sq > 0.0:
+			var dist_sq: float = world_pos.distance_squared_to(player_pos)
+			if dist_sq < full_sq:
+				color = full_lod_color
+			elif dist_sq < med_sq:
+				color = medium_lod_color
+			else:
+				color = far_lod_color
 
 		draw_circle(map_pos, dot_size, color)
 
