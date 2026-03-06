@@ -2,6 +2,7 @@ extends CharacterBody3D
 ## FPS player controller. WASD movement, mouse look, jump, shoot raycast.
 ## - Shoot: raycast from camera; hit objects with take_damage receive 1 damage; tranq dart placed at hit point
 ## - Mouse capture toggled with Escape
+## - When debug mode is active, gravity is disabled and Space/Ctrl move up/down
 
 const SPEED := 5.0
 const SPEED_BOOST := 10.0  ## Speed multiplier when Shift held (testing)
@@ -9,12 +10,14 @@ const JUMP_VELOCITY := 4.5
 const MOUSE_SENSITIVITY := 0.002
 const CAMERA_PITCH_LIMIT := deg_to_rad(89.0)
 const DART_OFFSET := 0.08  ## Offset from hit point for tranq dart to avoid z-fighting
+const DEBUG_FLY_SPEED := 5.0  ## Vertical fly speed in debug mode
 
 @onready var camera: Camera3D = $Camera3D
 @onready var raycast: RayCast3D = $Camera3D/RayCast3D
 
 var gravity: float
 var _tranq_dart_scene: PackedScene
+var _sim_manager: Node = null
 
 
 func _ready() -> void:
@@ -25,9 +28,13 @@ func _ready() -> void:
 
 
 func _physics_process(delta: float) -> void:
-	_apply_gravity(delta)
+	var debug_mode := _is_debug_mode()
+	if debug_mode:
+		_handle_debug_fly()
+	else:
+		_apply_gravity(delta)
+		_handle_jump()
 	_handle_movement()
-	_handle_jump()
 	move_and_slide()
 
 
@@ -40,9 +47,26 @@ func _input(event: InputEvent) -> void:
 		Input.mouse_mode = Input.MOUSE_MODE_VISIBLE if Input.mouse_mode == Input.MOUSE_MODE_CAPTURED else Input.MOUSE_MODE_CAPTURED
 
 
+func _is_debug_mode() -> bool:
+	if _sim_manager == null or not is_instance_valid(_sim_manager):
+		_sim_manager = get_tree().get_first_node_in_group("simulation_manager")
+	if _sim_manager and "debug_mode" in _sim_manager:
+		return _sim_manager.debug_mode
+	return false
+
+
 func _apply_gravity(delta: float) -> void:
 	if not is_on_floor():
 		velocity.y -= gravity * delta
+
+
+func _handle_debug_fly() -> void:
+	var fly_input := 0.0
+	if Input.is_action_pressed("jump"):
+		fly_input += 1.0
+	if Input.is_key_pressed(KEY_CTRL):
+		fly_input -= 1.0
+	velocity.y = fly_input * DEBUG_FLY_SPEED * (SPEED_BOOST if Input.is_key_pressed(KEY_SHIFT) else 1.0)
 
 
 func _handle_movement() -> void:

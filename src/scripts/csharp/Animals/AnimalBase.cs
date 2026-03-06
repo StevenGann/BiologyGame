@@ -53,13 +53,28 @@ public partial class AnimalBase : CharacterBody3D
 	/// <summary>0–1. Affects contagion and cohesion strength.</summary>
 	[Export(PropertyHint.Range, "0,1")] public float SocialFactor { get; set; } = 0.5f;
 
+	[ExportGroup("Dynamic Radii")]
+	/// <summary>Maximum radius for cohesion (move toward same-species center).</summary>
+	[Export] public float MaxCohesionRadius { get; set; } = 24.0f;
+	/// <summary>Maximum radius for contagion (panic spread from nearby panicking same-species).</summary>
+	[Export] public float MaxContagionRadius { get; set; } = 20.0f;
+	/// <summary>Rate at which cohesion radius grows per second (meters/sec).</summary>
+	[Export] public float CohesionRadiusGrowthRate { get; set; } = 2.0f;
+	/// <summary>Rate at which contagion radius grows per second (meters/sec).</summary>
+	[Export] public float ContagionRadiusGrowthRate { get; set; } = 2.0f;
+	/// <summary>Multiplier applied to cohesion radius when triggered (1.0 = no change, 0.5 = halve).</summary>
+	[Export(PropertyHint.Range, "0,1")] public float CohesionTriggerMultiplier { get; set; } = 1.0f;
+	/// <summary>Multiplier applied to contagion radius when triggered (1.0 = no change, 0.5 = halve).</summary>
+	[Export(PropertyHint.Range, "0,1")] public float ContagionTriggerMultiplier { get; set; } = 0.5f;
+
+	/// <summary>Current dynamic cohesion radius (starts at 0, grows until triggered, then multiplied).</summary>
+	public float CohesionRadius { get; protected set; }
+	/// <summary>Current dynamic contagion radius (starts at 0, grows until triggered, then multiplied).</summary>
+	public float ContagionRadius { get; protected set; }
+
 	[ExportGroup("Debug LOD Label")]
 	[Export] public float DebugLabelHeight { get; set; } = 2.5f;
 	[Export] public int DebugLabelFontSize { get; set; } = 72;
-	/// <summary>Radius for cohesion (move toward same-species center).</summary>
-	[Export] public float CohesionRadius { get; set; } = 12.0f;
-	/// <summary>Radius for contagion (panic spread from nearby panicking same-species).</summary>
-	[Export] public float ContagionRadius { get; set; } = 10.0f;
 
 	public int Health { get; set; }
 	/// <summary>True when animal was in FAR LOD last frame (for terrain re-snap on promote).</summary>
@@ -88,16 +103,139 @@ public partial class AnimalBase : CharacterBody3D
 	{
 		AddToGroup("animals");
 		Health = MaxHealth;
+		ApplySpeciesSocialFactor();
+		ApplySpeciesModel();
 		if (UsePs1Effect && HasNode("Model"))
 		{
 			var model = GetNode<Node3D>("Model");
 			ApplyPs1ToNode(model);
 		}
+		ApplySpeciesColorTint();
 		PickNewWanderTarget();
 		_wanderTimer = (float)GD.RandRange(WanderPauseMin, WanderPauseMax);
 		SetupDebugLabel();
 		SetupDebugMesh();
 		_cachedInstanceId = (int)GetInstanceId();
+	}
+
+	/// <summary>
+	/// Applies species-specific social factors. Rabbits, deer, and wolves are highly social.
+	/// </summary>
+	private void ApplySpeciesSocialFactor()
+	{
+		SocialFactor = species switch
+		{
+			Species.Rabbit => 0.9f,
+			Species.Deer => 0.85f,
+			Species.Wolf => 0.9f,
+			Species.Bison => 0.6f,
+			Species.Bear => 0.2f,
+			_ => SocialFactor
+		};
+	}
+
+	/// <summary>
+	/// Loads and applies the correct model based on species.
+	/// </summary>
+	private void ApplySpeciesModel()
+	{
+		var modelNode = GetNodeOrNull<Node3D>("Model");
+		if (modelNode == null) return;
+
+		var (modelPath, scale) = species switch
+		{
+			Species.Bison => ("res://assets/models/placeholders/animals/animal-bison.glb", new Vector3(2, 2, 2)),
+			Species.Rabbit => ("res://assets/models/placeholders/animals/animal-bison.glb", new Vector3(0.5f, 0.5f, 0.5f)),
+			Species.Wolf => ("res://assets/models/placeholders/animals/animal-dog.glb", new Vector3(1.5f, 1.5f, 1.5f)),
+			Species.Deer => ("res://assets/models/placeholders/animals/animal-horse.glb", new Vector3(1.8f, 1.8f, 1.8f)),
+			Species.Bear => ("res://assets/models/placeholders/animals/animal-dog.glb", new Vector3(3f, 3f, 3f)),
+			_ => ("res://assets/models/placeholders/animals/animal-bison.glb", new Vector3(2, 2, 2))
+		};
+
+		// Check if we need to swap the model
+		var currentModelPath = modelNode.SceneFilePath;
+		if (!string.IsNullOrEmpty(currentModelPath) && currentModelPath != modelPath)
+		{
+			// Remove old model and load new one
+			var newModelScene = GD.Load<PackedScene>(modelPath);
+			if (newModelScene != null)
+			{
+				var oldTransform = modelNode.Transform;
+				modelNode.QueueFree();
+				var newModel = newModelScene.Instantiate<Node3D>();
+				newModel.Name = "Model";
+				AddChild(newModel);
+				// Apply rotation and scale (rotate -90 degrees to face forward)
+				var basis = Basis.Identity;
+				basis = basis.Rotated(Vector3.Up, -Mathf.Pi / 2);
+				newModel.Transform = new Transform3D(basis.Scaled(scale), Vector3.Zero);
+			}
+		}
+		else
+		{
+			// Just apply scale to existing model
+			var basis = Basis.Identity;
+			basis = basis.Rotated(Vector3.Up, -Mathf.Pi / 2);
+			modelNode.Transform = new Transform3D(basis.Scaled(scale), Vector3.Zero);
+		}
+	}
+
+	/// <summary>
+	/// Applies species-specific color tint to the model materials.
+	/// </summary>
+	private void ApplySpeciesColorTint()
+	{
+		var modelNode = GetNodeOrNull<Node3D>("Model");
+		if (modelNode == null) return;
+
+		var tint = species switch
+		{
+			Species.Bison => new Color(0.82f, 0.71f, 0.55f),   // Tan
+			Species.Rabbit => new Color(1.0f, 1.0f, 1.0f),     // White
+			Species.Wolf => new Color(0.5f, 0.5f, 0.55f),      // Grey
+			Species.Deer => new Color(0.82f, 0.71f, 0.55f),    // Tan
+			Species.Bear => new Color(0.55f, 0.35f, 0.2f),     // Brown
+			_ => new Color(1.0f, 1.0f, 1.0f)
+		};
+
+		ApplyTintToNode(modelNode, tint);
+	}
+
+	/// <summary>
+	/// Recursively applies color tint to all MeshInstance3D nodes.
+	/// </summary>
+	private void ApplyTintToNode(Node node, Color tint)
+	{
+		if (node is MeshInstance3D meshInstance)
+		{
+			for (var i = 0; i < meshInstance.GetSurfaceOverrideMaterialCount(); i++)
+			{
+				var existingMat = meshInstance.GetSurfaceOverrideMaterial(i) ?? meshInstance.Mesh?.SurfaceGetMaterial(i);
+				if (existingMat is StandardMaterial3D stdMat)
+				{
+					var newMat = stdMat.Duplicate() as StandardMaterial3D;
+					if (newMat != null)
+					{
+						newMat.AlbedoColor = tint;
+						meshInstance.SetSurfaceOverrideMaterial(i, newMat);
+					}
+				}
+				else
+				{
+					// Create a new material with the tint
+					var newMat = new StandardMaterial3D
+					{
+						AlbedoColor = tint
+					};
+					meshInstance.SetSurfaceOverrideMaterial(i, newMat);
+				}
+			}
+		}
+
+		foreach (Node child in node.GetChildren())
+		{
+			ApplyTintToNode(child, tint);
+		}
 	}
 
 	private void ApplyPs1ToNode(Node node)
@@ -158,6 +296,9 @@ public partial class AnimalBase : CharacterBody3D
 
 		_accumulatedAiDelta += d;
 		_accumulatedMoveDelta += d;
+
+		// Grow dynamic radii toward maximums
+		GrowDynamicRadii(d);
 
 		var sim = GetSimManager();
 		if (sim != null)
@@ -465,6 +606,8 @@ public partial class AnimalBase : CharacterBody3D
 		}
 		if (_state == State.Wandering && panickingCount > 0 && nearestPanicked != null)
 		{
+			// Trigger: panicking neighbor found within contagion radius
+			TriggerContagionRadius();
 			var baseChance = 0.15f * delta;
 			if (GD.Randf() < SocialFactor * baseChance * panickingCount)
 				PanicFromPosition(nearestPanicked.GlobalPosition);
@@ -818,6 +961,8 @@ public partial class AnimalBase : CharacterBody3D
 			if (distSq < cohRadiusSq && distSq > 0.0001f) { center += other.GlobalPosition; count++; }
 		}
 		if (count <= 0) return Vector3.Zero;
+		// Trigger: neighbors found within cohesion radius
+		TriggerCohesionRadius();
 		center /= count;
 		var toCenter = center - GlobalPosition;
 		toCenter.Y = 0;
@@ -842,4 +987,29 @@ public partial class AnimalBase : CharacterBody3D
 	}
 
 	private Node3D GetPlayer() => GetTree().GetFirstNodeInGroup("player") as Node3D;
+
+	/// <summary>
+	/// Grows dynamic radii toward their maximums. Called each physics frame.
+	/// </summary>
+	protected virtual void GrowDynamicRadii(float delta)
+	{
+		CohesionRadius = Mathf.Min(CohesionRadius + CohesionRadiusGrowthRate * delta, MaxCohesionRadius);
+		ContagionRadius = Mathf.Min(ContagionRadius + ContagionRadiusGrowthRate * delta, MaxContagionRadius);
+	}
+
+	/// <summary>
+	/// Applies trigger multiplier to cohesion radius when triggered (neighbors found within range).
+	/// </summary>
+	protected void TriggerCohesionRadius()
+	{
+		CohesionRadius *= CohesionTriggerMultiplier;
+	}
+
+	/// <summary>
+	/// Applies trigger multiplier to contagion radius when triggered (panic spread from neighbor).
+	/// </summary>
+	protected void TriggerContagionRadius()
+	{
+		ContagionRadius *= ContagionTriggerMultiplier;
+	}
 }

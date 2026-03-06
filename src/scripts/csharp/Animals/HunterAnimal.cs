@@ -12,12 +12,21 @@ public partial class HunterAnimal : AnimalBase
     [Export] public float StalkSpeed { get; set; } = 1.0f;
     /// <summary>Speed while chasing prey.</summary>
     [Export] public float ChaseSpeed { get; set; } = 5.0f;
-    /// <summary>Distance to prey that triggers chase (or prey panicking).</summary>
-    [Export] public float ChaseTriggerRange { get; set; } = 3.0f;
     /// <summary>Distance at which kill is applied.</summary>
     [Export] public float KillRange { get; set; } = 1.5f;
     /// <summary>Damage dealt on kill (effectively lethal).</summary>
     [Export] public int KillDamage { get; set; } = 999;
+
+    [ExportGroup("Hunter Dynamic Radii")]
+    /// <summary>Maximum distance to prey that triggers chase.</summary>
+    [Export] public float MaxChaseTriggerRange { get; set; } = 6.0f;
+    /// <summary>Rate at which chase trigger range grows per second (meters/sec).</summary>
+    [Export] public float ChaseTriggerGrowthRate { get; set; } = 2.0f;
+    /// <summary>Multiplier applied to chase trigger range when triggered (1.0 = no change, 0.5 = halve).</summary>
+    [Export(PropertyHint.Range, "0,1")] public float ChaseTriggerMultiplier { get; set; } = 0.5f;
+
+    /// <summary>Current dynamic chase trigger range.</summary>
+    public float ChaseTriggerRange { get; private set; }
 
     private enum HunterState
     {
@@ -64,6 +73,7 @@ public partial class HunterAnimal : AnimalBase
             else if ((_currentTarget as AnimalBase)?.IsPanicking == true ||
                      GlobalPosition.DistanceTo(_currentTarget.GlobalPosition) < ChaseTriggerRange)
             {
+                TriggerChaseTriggerRange();
                 _hunterState = HunterState.Chasing;
             }
         }
@@ -249,4 +259,15 @@ public partial class HunterAnimal : AnimalBase
     }
 
     private void ClearTarget() => _currentTarget = null;
+
+    protected override void GrowDynamicRadii(float delta)
+    {
+        base.GrowDynamicRadii(delta);
+        ChaseTriggerRange = Mathf.Min(ChaseTriggerRange + ChaseTriggerGrowthRate * delta, MaxChaseTriggerRange);
+    }
+
+    private void TriggerChaseTriggerRange()
+    {
+        ChaseTriggerRange *= ChaseTriggerMultiplier;
+    }
 }

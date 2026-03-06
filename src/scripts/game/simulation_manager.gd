@@ -300,26 +300,26 @@ func should_movement_tick_this_frame(lod: LODTier, instance_id: int) -> bool:
 func _update_dynamic_lod(delta: float) -> void:
 	if not dynamic_lod_enabled:
 		return
-	
+
 	# Update EMA of FPS every frame (trivial cost)
 	if delta > 0.0:
 		_smoothed_fps = lerpf(_smoothed_fps, 1.0 / delta, 0.05)
-	
+
 	# Only recalculate radii every N frames
 	if _frame_counter % radius_adjust_interval != 0:
 		return
-	
+
 	# Compute scale factor: clamp(smoothed_fps / target_fps, 0.0, 1.0)
 	var scale: float = clampf(_smoothed_fps / target_fps, 0.0, 1.0)
-	
+
 	# Compute target radii
 	var target_full := maxf(min_full_sim_radius, _max_full_sim_radius * scale)
 	var target_medium := maxf(min_medium_sim_radius, _max_medium_sim_radius * scale)
-	
+
 	# Smoothly lerp current radii toward targets
 	full_sim_radius = lerpf(full_sim_radius, target_full, radius_smoothing)
 	medium_sim_radius = lerpf(medium_sim_radius, target_medium, radius_smoothing)
-	
+
 	# Emit signal if medium radius changed significantly (>1 meter)
 	if absf(medium_sim_radius - _last_emitted_medium_radius) > 1.0:
 		_last_emitted_medium_radius = medium_sim_radius

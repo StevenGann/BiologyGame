@@ -8,12 +8,33 @@ namespace BiologyGame.Animals;
 /// </summary>
 public partial class ForagerAnimal : AnimalBase
 {
-    /// <summary>Range to detect consumable plants.</summary>
-    [Export] public float PlantDetectionRange { get; set; } = 5.0f;
-    /// <summary>Range to detect hunters (triggers panic).</summary>
-    [Export] public float HunterDetectionRange { get; set; } = 12.0f;
-    /// <summary>Distance beyond which hunter is considered safe; panic can end.</summary>
-    [Export] public float HunterSafeDistance { get; set; } = 20.0f;
+    [ExportGroup("Forager Dynamic Radii")]
+    /// <summary>Maximum range to detect consumable plants.</summary>
+    [Export] public float MaxPlantDetectionRange { get; set; } = 10.0f;
+    /// <summary>Maximum range to detect hunters (triggers panic).</summary>
+    [Export] public float MaxHunterDetectionRange { get; set; } = 24.0f;
+    /// <summary>Maximum distance beyond which hunter is considered safe.</summary>
+    [Export] public float MaxHunterSafeDistance { get; set; } = 40.0f;
+    /// <summary>Rate at which plant detection range grows per second (meters/sec).</summary>
+    [Export] public float PlantDetectionGrowthRate { get; set; } = 2.0f;
+    /// <summary>Rate at which hunter detection range grows per second (meters/sec).</summary>
+    [Export] public float HunterDetectionGrowthRate { get; set; } = 2.0f;
+    /// <summary>Rate at which hunter safe distance grows per second (meters/sec).</summary>
+    [Export] public float HunterSafeDistanceGrowthRate { get; set; } = 2.0f;
+    /// <summary>Multiplier applied to plant detection range when triggered (1.0 = no change, 0.5 = halve).</summary>
+    [Export(PropertyHint.Range, "0,1")] public float PlantDetectionTriggerMultiplier { get; set; } = 0.5f;
+    /// <summary>Multiplier applied to hunter detection range when triggered (1.0 = no change, 0.5 = halve).</summary>
+    [Export(PropertyHint.Range, "0,1")] public float HunterDetectionTriggerMultiplier { get; set; } = 0.5f;
+    /// <summary>Multiplier applied to hunter safe distance when triggered (1.0 = no change, 0.5 = halve).</summary>
+    [Export(PropertyHint.Range, "0,1")] public float HunterSafeDistanceTriggerMultiplier { get; set; } = 0.5f;
+
+    /// <summary>Current dynamic plant detection range.</summary>
+    public float PlantDetectionRange { get; private set; }
+    /// <summary>Current dynamic hunter detection range.</summary>
+    public float HunterDetectionRange { get; private set; }
+    /// <summary>Current dynamic hunter safe distance.</summary>
+    public float HunterSafeDistance { get; private set; }
+
     /// <summary>Seconds per eat cycle before calling plant.consume().</summary>
     [Export] public float EatingDuration { get; set; } = 2.0f;
 
@@ -46,6 +67,7 @@ public partial class ForagerAnimal : AnimalBase
                 var hunter = GetNearestHunter();
                 if (hunter == null || GlobalPosition.DistanceTo(hunter.GlobalPosition) >= HunterSafeDistance)
                 {
+                    TriggerHunterSafeDistance();
                     _state = State.Wandering;
                     _foragerState = ForagerState.Wandering;
                     _panickingFromHunter = false;
@@ -225,6 +247,8 @@ public partial class ForagerAnimal : AnimalBase
                     nearest = h;
                 }
             }
+            if (nearest != null)
+                TriggerHunterDetectionRange();
             return nearest;
         }
         var parent = GetParent();
@@ -240,6 +264,8 @@ public partial class ForagerAnimal : AnimalBase
                 nearest = hn;
             }
         }
+        if (nearest != null)
+            TriggerHunterDetectionRange();
         return nearest;
     }
 
@@ -262,6 +288,8 @@ public partial class ForagerAnimal : AnimalBase
                     nearest = pn;
                 }
             }
+            if (nearest != null)
+                TriggerPlantDetectionRange();
             return nearest;
         }
         var parent = GetParent()?.GetParent();
@@ -278,6 +306,31 @@ public partial class ForagerAnimal : AnimalBase
                 nearest = pn;
             }
         }
+        if (nearest != null)
+            TriggerPlantDetectionRange();
         return nearest;
+    }
+
+    protected override void GrowDynamicRadii(float delta)
+    {
+        base.GrowDynamicRadii(delta);
+        PlantDetectionRange = Mathf.Min(PlantDetectionRange + PlantDetectionGrowthRate * delta, MaxPlantDetectionRange);
+        HunterDetectionRange = Mathf.Min(HunterDetectionRange + HunterDetectionGrowthRate * delta, MaxHunterDetectionRange);
+        HunterSafeDistance = Mathf.Min(HunterSafeDistance + HunterSafeDistanceGrowthRate * delta, MaxHunterSafeDistance);
+    }
+
+    private void TriggerPlantDetectionRange()
+    {
+        PlantDetectionRange *= PlantDetectionTriggerMultiplier;
+    }
+
+    private void TriggerHunterDetectionRange()
+    {
+        HunterDetectionRange *= HunterDetectionTriggerMultiplier;
+    }
+
+    private void TriggerHunterSafeDistance()
+    {
+        HunterSafeDistance *= HunterSafeDistanceTriggerMultiplier;
     }
 }
