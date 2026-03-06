@@ -99,6 +99,19 @@ public partial class AnimalBase : CharacterBody3D
 	/// <summary>True when in Panicking state.</summary>
 	public bool IsPanicking => _state == State.Panicking;
 
+	/// <summary>
+	/// Sets the visual detail level for this animal.
+	/// LOD 0 (FULL): 3D model visible.
+	/// LOD 1 (MEDIUM): 3D model hidden; AnimalMultimeshRenderer shows a capsule stand-in.
+	/// LOD 2 (FAR): 3D model hidden; animal is managed by FarAnimalSim with no visible node.
+	/// </summary>
+	public void SetVisualLod(int lod)
+	{
+		var model = GetNodeOrNull<Node3D>("Model");
+		if (model != null)
+			model.Visible = (lod == LODTierFull);
+	}
+
 	public override void _Ready()
 	{
 		AddToGroup("animals");
@@ -352,6 +365,7 @@ public partial class AnimalBase : CharacterBody3D
 		{
 			var pos = GlobalPosition;
 			var lod = (int)sim.Call("get_lod_tier", pos).AsInt32();
+			SetVisualLod(lod);
 			var aiTick = sim.Call("should_ai_tick_this_frame", lod, _cachedInstanceId).AsBool();
 			var moveTick = sim.Call("should_movement_tick_this_frame", lod, _cachedInstanceId).AsBool();
 

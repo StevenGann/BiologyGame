@@ -50,6 +50,10 @@ var _last_emitted_medium_radius: float = 200.0
 
 var debug_mode: bool = false
 
+## C# bridge for accelerated hot loops (Phase 4). Auto-located by group "sim_bridge".
+## Falls back to pure GDScript if not found.
+var _bridge: Node = null
+
 @export_group("Debug Visualizations")
 @export var debug_close_radius: float = 15.0  ## Always show debug within this distance (meters)
 @export var debug_far_radius: float = 50.0  ## Max distance for debug when in view frustum
@@ -85,6 +89,8 @@ func _ready() -> void:
 		frustum_lod_bias_enabled = config.get("frustum_lod_bias_enabled")
 		occlusion_lod_bias_enabled = config.get("occlusion_lod_bias_enabled")
 		occlusion_check_interval_frames = config.get("occlusion_check_interval_frames")
+	# Locate C# bridge for hot-loop acceleration (Phase 4).
+	_bridge = get_tree().get_first_node_in_group("sim_bridge")
 
 
 func _physics_process(delta: float) -> void:
@@ -106,49 +112,85 @@ func _process_far_animals(delta: float) -> void:
 	if not _animals_node:
 		return
 	var terrain := get_parent().get_node_or_null("TestTerrain")
-	for a in _animals_node.get_children():
-		if not is_instance_of(a, CharacterBody3D) or not is_instance_valid(a):
-			continue
-		var lod: LODTier = get_lod_tier(a.global_position)
-		if lod == LODTier.FAR:
-			if "WasFarLod" in a:
-				a.set("WasFarLod", true)
-			elif "_was_far_lod" in a:
-				a.set("_was_far_lod", true)
-			a.set_physics_process(false)
-			if a.has_method("process_far_tick"):
+
+	if _bridge and _bridge.has_method("classify_lods") and _bridge.has_method("apply_far_lod_physics"):
+		# --- C# accelerated path (Phase 4) ---
+		var cam := get_viewport().get_camera_3d() if frustum_lod_bias_enabled else null
+		var full_sq := full_sim_radius * full_sim_radius
+		var med_sq := medium_sim_radius * medium_sim_radius
+		var lod_tiers: Array = _bridge.call(
+			"classify_lods", _animals_node, _cached_player_pos,
+			full_sq, med_sq, cam, frustum_lod_bias_enabled
+		)
+		# Apply physics enable/disable and collect animals that just left FAR.
+		var snap_positions: Array = _bridge.call("apply_far_lod_physics", _animals_node, lod_tiers)
+		# Terrain snap for promoted animals.
+		if terrain and terrain.has_method("get_height_at"):
+			for pos in snap_positions:
+				pass  # Position is stale; snap happens in AnimalBase.ProcessFarTick promotion path.
+		# FAR tick: still called per-animal in GDScript for animals that have process_far_tick.
+		var children := _animals_node.get_children()
+		for i in children.size():
+			var a = children[i]
+			if not is_instance_of(a, CharacterBody3D) or not is_instance_valid(a):
+				continue
+			var lod_int: int = lod_tiers[i] if i < lod_tiers.size() else 2
+			if lod_int == 2 and a.has_method("process_far_tick"):
 				var instance_id: int = a.get_instance_id()
-				var ai_tick: bool = should_ai_tick_this_frame(lod, instance_id)
-				var move_tick: bool = should_movement_tick_this_frame(lod, instance_id)
+				var ai_tick: bool = should_ai_tick_this_frame(LODTier.FAR, instance_id)
+				var move_tick: bool = should_movement_tick_this_frame(LODTier.FAR, instance_id)
 				a.process_far_tick(delta, ai_tick, move_tick)
-		else:
-			if "WasFarLod" in a and a.get("WasFarLod"):
-				a.set("WasFarLod", false)
-			elif "_was_far_lod" in a and a.get("_was_far_lod"):
-				a.set("_was_far_lod", false)
-				if terrain and terrain.has_method("get_height_at"):
-					var pos: Vector3 = a.global_position
-					a.global_position.y = terrain.get_height_at(pos.x, pos.z) + 0.3
-			a.set_physics_process(true)
+	else:
+		# --- Pure GDScript fallback ---
+		for a in _animals_node.get_children():
+			if not is_instance_of(a, CharacterBody3D) or not is_instance_valid(a):
+				continue
+			var lod: LODTier = get_lod_tier(a.global_position)
+			if lod == LODTier.FAR:
+				if "WasFarLod" in a:
+					a.set("WasFarLod", true)
+				elif "_was_far_lod" in a:
+					a.set("_was_far_lod", true)
+				a.set_physics_process(false)
+				if a.has_method("process_far_tick"):
+					var instance_id: int = a.get_instance_id()
+					var ai_tick: bool = should_ai_tick_this_frame(lod, instance_id)
+					var move_tick: bool = should_movement_tick_this_frame(lod, instance_id)
+					a.process_far_tick(delta, ai_tick, move_tick)
+			else:
+				if "WasFarLod" in a and a.get("WasFarLod"):
+					a.set("WasFarLod", false)
+				elif "_was_far_lod" in a and a.get("_was_far_lod"):
+					a.set("_was_far_lod", false)
+					if terrain and terrain.has_method("get_height_at"):
+						var pos: Vector3 = a.global_position
+						a.global_position.y = terrain.get_height_at(pos.x, pos.z) + 0.3
+				a.set_physics_process(true)
 
 
 ## Rebuild _animal_cells and _plant_cells from Animals and Plants node children.
 func _rebuild_grid() -> void:
-	_animal_cells.clear()
-	_plant_cells.clear()
-	if _animals_node:
-		for a in _animals_node.get_children():
-			if is_instance_of(a, Node3D) and is_instance_valid(a):
-				var an := a as Node3D
-				var species := 0
-				if "species" in an:
-					species = an.species
-				var is_hunter := a.is_in_group("hunters")
-				_register_animal_internal(an, species, is_hunter)
-	if _plants_node:
-		for p in _plants_node.get_children():
-			if is_instance_of(p, Node3D) and is_instance_valid(p):
-				_register_plant_internal(p as Node3D)
+	if _bridge and _bridge.has_method("rebuild_animal_grid"):
+		# --- C# accelerated path (Phase 4) ---
+		_animal_cells = _bridge.call("rebuild_animal_grid", _animals_node, CELL_SIZE)
+		_plant_cells = _bridge.call("rebuild_plant_grid", _plants_node, CELL_SIZE)
+	else:
+		# --- Pure GDScript fallback ---
+		_animal_cells.clear()
+		_plant_cells.clear()
+		if _animals_node:
+			for a in _animals_node.get_children():
+				if is_instance_of(a, Node3D) and is_instance_valid(a):
+					var an := a as Node3D
+					var species := 0
+					if "species" in an:
+						species = an.species
+					var is_hunter := a.is_in_group("hunters")
+					_register_animal_internal(an, species, is_hunter)
+		if _plants_node:
+			for p in _plants_node.get_children():
+				if is_instance_of(p, Node3D) and is_instance_valid(p):
+					_register_plant_internal(p as Node3D)
 
 
 func _register_animal_internal(animal: Node3D, animal_species: int, is_hunter: bool) -> void:
