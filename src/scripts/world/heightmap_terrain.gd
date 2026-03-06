@@ -7,9 +7,9 @@ extends Node3D
 
 @export var heightmap_path: String = ""  ## Empty = procedural noise
 @export var terrain_size: float = 100.0  ## World size (X and Z extent)
-@export var height_min: float = -2.0  ## Elevation range
-@export var height_max: float = 8.0
-@export var resolution: int = 128  ## Grid resolution for procedural heightmap
+@export var height_min: float = -20.0  ## Elevation range
+@export var height_max: float = 180.0
+@export var resolution: int = 1024*4  ## Grid resolution for procedural heightmap
 
 @export var ground_material: Material  ## Applied to terrain mesh; heightmap displacement disabled for baked mesh
 

@@ -65,6 +65,6 @@ shoot={
 
 [rendering]
 
-textures/canvas_textures/default_texture_filter=1
 rendering_device/d3d12/max_resource_descriptors=524288
 rendering_device/driver.windows="d3d12"
+occlusion_culling/use_occlusion_culling=true
