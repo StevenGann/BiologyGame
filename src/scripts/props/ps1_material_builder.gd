@@ -38,18 +38,38 @@ static func create_from_material(original: Material) -> ShaderMaterial:
 
 
 ## Recursively apply PS1 effect to all MeshInstance3D under node. Replaces surface materials with PS1 variant.
-static func apply_to_node(node: Node) -> void:
+## If tint_color is not null, uses it as albedo_color (for species coloring); otherwise preserves original material color.
+static func apply_to_node(node: Node, tint_color: Color = Color(1, 1, 1, 1)) -> void:
 	if node is MeshInstance3D:
 		var mi := node as MeshInstance3D
 		var mesh := mi.mesh
 		if mesh:
 			for surf_idx in mesh.get_surface_count():
-				var orig_mat := mesh.surface_get_material(surf_idx)
-				var shader_mat: ShaderMaterial
-				if orig_mat:
-					shader_mat = create_from_material(orig_mat)
-				else:
-					shader_mat = create_from_material(null)
-				mi.set_surface_override_material(surf_idx, shader_mat)
+				var orig_mat: Material = mi.get_surface_override_material(surf_idx)
+				if not orig_mat:
+					orig_mat = mesh.surface_get_material(surf_idx)
+				var shader_mat := _create_ps1_material(orig_mat, tint_color)
+				if shader_mat != null:
+					mi.set_surface_override_material(surf_idx, shader_mat)
 	for child in node.get_children():
-		apply_to_node(child)
+		apply_to_node(child, tint_color)
+
+
+## Internal: build PS1 ShaderMaterial. Uses tint_color as albedo_color (for species coloring).
+static func _create_ps1_material(original: Material, tint_color: Color) -> ShaderMaterial:
+	if not PS1_SHADER:
+		return null
+	var shader_mat := ShaderMaterial.new()
+	shader_mat.shader = PS1_SHADER
+
+	var albedo_tex: Texture2D = null
+	if original and original is BaseMaterial3D:
+		albedo_tex = (original as BaseMaterial3D).albedo_texture
+	elif original:
+		var tex = original.get("albedo_texture")
+		if tex is Texture2D:
+			albedo_tex = tex
+
+	shader_mat.set_shader_parameter("albedo", albedo_tex if albedo_tex else WHITE_TEXTURE)
+	shader_mat.set_shader_parameter("albedo_color", tint_color)
+	return shader_mat

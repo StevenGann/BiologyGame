@@ -108,9 +108,13 @@ public partial class AnimalBase : CharacterBody3D
 		if (UsePs1Effect && HasNode("Model"))
 		{
 			var model = GetNode<Node3D>("Model");
-			ApplyPs1ToNode(model);
+			var tint = GetSpeciesTintColor();
+			ApplyPs1ToNode(model, tint);
 		}
-		ApplySpeciesColorTint();
+		else if (HasNode("Model"))
+		{
+			ApplySpeciesColorTint(); // When PS1 is off, apply tint via material overrides
+		}
 		PickNewWanderTarget();
 		_wanderTimer = (float)GD.RandRange(WanderPauseMin, WanderPauseMax);
 		SetupDebugLabel();
@@ -156,11 +160,11 @@ public partial class AnimalBase : CharacterBody3D
 		var currentModelPath = modelNode.SceneFilePath;
 		if (!string.IsNullOrEmpty(currentModelPath) && currentModelPath != modelPath)
 		{
-			// Remove old model and load new one
+			// Remove old model and load new one (remove before add so GetNode("Model") finds the new one)
 			var newModelScene = GD.Load<PackedScene>(modelPath);
 			if (newModelScene != null)
 			{
-				var oldTransform = modelNode.Transform;
+				RemoveChild(modelNode);
 				modelNode.QueueFree();
 				var newModel = newModelScene.Instantiate<Node3D>();
 				newModel.Name = "Model";
@@ -181,24 +185,28 @@ public partial class AnimalBase : CharacterBody3D
 	}
 
 	/// <summary>
-	/// Applies species-specific color tint to the model materials.
+	/// Species color tint for model materials. Rabbits white, wolves grey, deer tan, bears brown.
+	/// </summary>
+	private Color GetSpeciesTintColor()
+	{
+		return species switch
+		{
+			Species.Bison => new Color(0.82f, 0.71f, 0.55f),   // Tan
+			Species.Rabbit => new Color(1.0f, 1.0f, 1.0f),     // White
+			Species.Wolf => new Color(0.52f, 0.52f, 0.55f),    // Grey
+			Species.Deer => new Color(0.9f, 0.78f, 0.6f),      // Tan (lighter than bison)
+			Species.Bear => new Color(0.45f, 0.28f, 0.18f),    // Brown
+			_ => new Color(1.0f, 1.0f, 1.0f)
+		};
+	}
+
+	/// Applies species-specific color tint when PS1 effect is disabled.
 	/// </summary>
 	private void ApplySpeciesColorTint()
 	{
 		var modelNode = GetNodeOrNull<Node3D>("Model");
 		if (modelNode == null) return;
-
-		var tint = species switch
-		{
-			Species.Bison => new Color(0.82f, 0.71f, 0.55f),   // Tan
-			Species.Rabbit => new Color(1.0f, 1.0f, 1.0f),     // White
-			Species.Wolf => new Color(0.5f, 0.5f, 0.55f),      // Grey
-			Species.Deer => new Color(0.82f, 0.71f, 0.55f),    // Tan
-			Species.Bear => new Color(0.55f, 0.35f, 0.2f),     // Brown
-			_ => new Color(1.0f, 1.0f, 1.0f)
-		};
-
-		ApplyTintToNode(modelNode, tint);
+		ApplyTintToNode(modelNode, GetSpeciesTintColor());
 	}
 
 	/// <summary>
@@ -206,29 +214,29 @@ public partial class AnimalBase : CharacterBody3D
 	/// </summary>
 	private void ApplyTintToNode(Node node, Color tint)
 	{
-		if (node is MeshInstance3D meshInstance)
+		if (node is MeshInstance3D meshInstance && meshInstance.Mesh != null)
 		{
-			for (var i = 0; i < meshInstance.GetSurfaceOverrideMaterialCount(); i++)
+			var surfaceCount = meshInstance.Mesh.GetSurfaceCount();
+			for (var i = 0; i < surfaceCount; i++)
 			{
-				var existingMat = meshInstance.GetSurfaceOverrideMaterial(i) ?? meshInstance.Mesh?.SurfaceGetMaterial(i);
+				StandardMaterial3D matToSet = null;
+				var existingMat = meshInstance.GetSurfaceOverrideMaterial(i) ?? meshInstance.Mesh.SurfaceGetMaterial(i);
 				if (existingMat is StandardMaterial3D stdMat)
 				{
-					var newMat = stdMat.Duplicate() as StandardMaterial3D;
-					if (newMat != null)
-					{
-						newMat.AlbedoColor = tint;
-						meshInstance.SetSurfaceOverrideMaterial(i, newMat);
-					}
+					matToSet = stdMat.Duplicate() as StandardMaterial3D;
 				}
-				else
+				if (matToSet == null)
 				{
-					// Create a new material with the tint
-					var newMat = new StandardMaterial3D
+					matToSet = new StandardMaterial3D
 					{
 						AlbedoColor = tint
 					};
-					meshInstance.SetSurfaceOverrideMaterial(i, newMat);
 				}
+				else
+				{
+					matToSet.AlbedoColor = tint;
+				}
+				meshInstance.SetSurfaceOverrideMaterial(i, matToSet);
 			}
 		}
 
@@ -238,10 +246,49 @@ public partial class AnimalBase : CharacterBody3D
 		}
 	}
 
-	private void ApplyPs1ToNode(Node node)
+	private static Shader _ps1Shader;
+	private static Texture2D _ps1WhiteTexture;
+
+	private void ApplyPs1ToNode(Node node, Color tint)
 	{
-		var script = GD.Load<GDScript>("res://scripts/props/ps1_material_builder.gd");
-		script.Call("apply_to_node", node);
+		if (_ps1Shader == null)
+			_ps1Shader = GD.Load<Shader>("res://shaders/ps1_style.gdshader");
+		if (_ps1WhiteTexture == null)
+			_ps1WhiteTexture = GD.Load<Texture2D>("res://assets/heightmaps/white_1x1.png");
+		if (_ps1Shader == null || _ps1WhiteTexture == null) return;
+		ApplyPs1ToNodeRecursive(node, tint);
+	}
+
+	private void ApplyPs1ToNodeRecursive(Node node, Color tint)
+	{
+		if (node is MeshInstance3D mi && mi.Mesh != null)
+		{
+			var surfaceCount = mi.Mesh.GetSurfaceCount();
+			for (var i = 0; i < surfaceCount; i++)
+			{
+				var orig = mi.GetSurfaceOverrideMaterial(i) ?? mi.Mesh.SurfaceGetMaterial(i);
+				var albedoTex = GetAlbedoTexture(orig);
+				var mat = new ShaderMaterial
+				{
+					Shader = _ps1Shader
+				};
+				mat.SetShaderParameter("albedo", albedoTex ?? _ps1WhiteTexture);
+				mat.SetShaderParameter("albedo_color", tint);
+				mat.SetShaderParameter("use_solid_tint", true);
+				mi.SetSurfaceOverrideMaterial(i, mat);
+			}
+		}
+		foreach (Node child in node.GetChildren())
+			ApplyPs1ToNodeRecursive(child, tint);
+	}
+
+	private static Texture2D GetAlbedoTexture(Material m)
+	{
+		if (m is BaseMaterial3D b)
+			return b.AlbedoTexture;
+		if (m == null) return null;
+		var v = m.Get("albedo_texture");
+		return v.AsGodotObject() as Texture2D;
 	}
 
 	private void SetupDebugLabel()

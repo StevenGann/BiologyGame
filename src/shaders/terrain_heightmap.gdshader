@@ -2,8 +2,8 @@ shader_type spatial;
 render_mode blend_mix, cull_back, depth_draw_opaque, depth_test_default,
 	specular_disabled, vertex_lighting;
 
-uniform sampler2D albedo : source_color, filter_linear, repeat_disable;
-uniform sampler2D heightmap : source_color, filter_linear, repeat_disable;
+uniform sampler2D albedo : source_color, filter_nearest, repeat_disable;
+uniform sampler2D heightmap : source_color, filter_nearest, repeat_disable;
 uniform float height_min = -2.0;
 uniform float height_max = 8.0;
 uniform bool use_heightmap_displacement = true;

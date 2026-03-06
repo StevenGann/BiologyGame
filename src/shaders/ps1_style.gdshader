@@ -8,6 +8,7 @@ uniform float jitter : hint_range(0, 1) = 0.25;
 uniform ivec2 resolution = ivec2(320, 240);
 uniform bool affine_mapping = true;
 uniform vec4 albedo_color : source_color = vec4(1.0, 1.0, 1.0, 1.0);
+uniform bool use_solid_tint = false;  // When true, use albedo_color only (for species coloring)
 
 vec4 snap_to_position(vec4 base_position) {
 	vec4 snapped_position = base_position;
@@ -38,7 +39,12 @@ void fragment() {
 	vec4 color_base = albedo_color;
 	vec4 vertex_color = COLOR;
 
-	ALBEDO = (color_base * texture_color * vertex_color).rgb;
-	ALPHA = texture_color.a * color_base.a * vertex_color.a;
+	if (use_solid_tint) {
+		ALBEDO = color_base.rgb;
+		ALPHA = color_base.a;
+	} else {
+		ALBEDO = (color_base * texture_color * vertex_color).rgb;
+		ALPHA = texture_color.a * color_base.a * vertex_color.a;
+	}
 	ALPHA_SCISSOR_THRESHOLD = alpha_scissor;
 }
