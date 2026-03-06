@@ -43,6 +43,11 @@ var _last_emitted_medium_radius: float = 200.0
 
 @export var grid_rebuild_interval: int = 4  ## Rebuild grid every N physics frames
 
+@export_group("LOD Visibility Bias")
+@export var frustum_lod_bias_enabled: bool = true  ## Treat animals outside camera frustum as FAR
+@export var occlusion_lod_bias_enabled: bool = true  ## Treat terrain-occluded animals as FAR
+@export var occlusion_check_interval_frames: int = 5  ## Throttle occlusion checks per animal
+
 var debug_mode: bool = false
 
 @export_group("Debug Visualizations")
@@ -74,6 +79,12 @@ func _ready() -> void:
 	_max_medium_sim_radius = medium_sim_radius
 	_last_emitted_medium_radius = medium_sim_radius
 	_smoothed_fps = target_fps
+	# Sync LOD visibility bias from CullingConfig
+	var config := get_node_or_null("/root/CullingConfig")
+	if config:
+		frustum_lod_bias_enabled = config.get("frustum_lod_bias_enabled")
+		occlusion_lod_bias_enabled = config.get("occlusion_lod_bias_enabled")
+		occlusion_check_interval_frames = config.get("occlusion_check_interval_frames")
 
 
 func _physics_process(delta: float) -> void:
@@ -252,18 +263,60 @@ func get_plants_in_radius(center: Vector3, radius: float) -> Array:
 	return result
 
 
-## Returns LOD tier based on squared distance from cached player position.
+## Returns LOD tier based on distance, optional frustum bias, and optional occlusion bias.
 func get_lod_tier(node_pos: Vector3) -> LODTier:
 	if _cached_player == null or not is_instance_valid(_cached_player):
 		return LODTier.FULL
 	var dist_sq := node_pos.distance_squared_to(_cached_player_pos)
 	var full_sq := full_sim_radius * full_sim_radius
 	var med_sq := medium_sim_radius * medium_sim_radius
+	var lod: LODTier
 	if dist_sq < full_sq:
-		return LODTier.FULL
-	if dist_sq < med_sq:
-		return LODTier.MEDIUM
-	return LODTier.FAR
+		lod = LODTier.FULL
+	elif dist_sq < med_sq:
+		lod = LODTier.MEDIUM
+	else:
+		return LODTier.FAR
+
+	if frustum_lod_bias_enabled:
+		var cam := get_viewport().get_camera_3d()
+		if cam and not cam.is_position_in_frustum(node_pos):
+			return LODTier.FAR
+
+	if occlusion_lod_bias_enabled and lod != LODTier.FAR:
+		var seed_val := int(hash(Vector2i(int(node_pos.x), int(node_pos.z)))) & 0x7FFFFFFF
+		if (_frame_counter + seed_val) % maxi(1, occlusion_check_interval_frames) == 0:
+			var terrain := get_parent().get_node_or_null("TestTerrain")
+			if terrain and terrain.has_method("get_height_at"):
+				if _is_occluded_by_terrain(node_pos, terrain):
+					return LODTier.FAR
+
+	return lod
+
+
+## True if target is occluded by terrain (ray from camera to target intersects terrain above ray).
+func _is_occluded_by_terrain(target: Vector3, terrain: Node) -> bool:
+	var cam := get_viewport().get_camera_3d()
+	if not cam:
+		return false
+	var cam_pos := cam.global_position
+	var dx := target.x - cam_pos.x
+	var dz := target.z - cam_pos.z
+	var dist_2d := sqrt(dx * dx + dz * dz)
+	if dist_2d < 1.0:
+		return false
+	var steps := maxi(2, int(dist_2d / 2.0))
+	var step_x := dx / float(steps)
+	var step_z := dz / float(steps)
+	for i in range(1, steps):
+		var t := float(i) / float(steps)
+		var x := cam_pos.x + step_x * float(i)
+		var z := cam_pos.z + step_z * float(i)
+		var ray_y := lerpf(cam_pos.y, target.y, t)
+		var terrain_y: float = terrain.get_height_at(x, z)
+		if terrain_y > ray_y + 0.5:
+			return true
+	return false
 
 
 ## Whether AI should tick this frame for given LOD. Uses (frame_counter + instance_id) % interval for staggering.

@@ -1,10 +1,9 @@
-extends StaticBody3D
-## Placeholder tree prop. On _ready: picks random model from TREE_MODELS by position-based seed,
-## instantiates with scale variation, applies PS1 effect, builds trimesh collision from mesh.
+extends Node3D
+## Placeholder tree prop. On _ready: picks random model, applies PS1 effect.
+## Physics (collision) is created only when player is near (via PropPhysicsManager).
 
 const PS1MaterialBuilder = preload("res://scripts/props/ps1_material_builder.gd")
 
-## Preloaded tree models. Preload used because DirAccess can fail in export.
 const TREE_MODELS: Array[PackedScene] = [
 	preload("res://assets/models/placeholders/trees/tree.glb"),
 	preload("res://assets/models/placeholders/trees/tree-autumn.glb"),
@@ -18,8 +17,14 @@ const TREE_MODELS: Array[PackedScene] = [
 ]
 
 @export var model_scale: float = 3.5
-@export var scale_variation: float = 0.5  ## Random ± on scale
+@export var scale_variation: float = 0.5
 @export var use_ps1_effect: bool = true
+@export var view_distance: float = 400.0
+@export var view_distance_margin: float = 20.0
+
+var physics_active: bool = false
+var _model: Node3D
+var _cached_collision_shape: Shape3D = null
 
 
 func _ready() -> void:
@@ -30,19 +35,14 @@ func _apply_ps1_with_original_colors(node: Node) -> void:
 	PS1MaterialBuilder.apply_to_node(node)
 
 
-func _create_trimesh_collision(model: Node3D) -> void:
+func _create_trimesh_shape_from_model(model: Node3D) -> Shape3D:
 	var all_faces: PackedVector3Array = []
 	_collect_mesh_faces(model, all_faces)
 	if all_faces.is_empty():
-		return
-
+		return null
 	var shape := ConcavePolygonShape3D.new()
 	shape.set_faces(all_faces)
-
-	var col_shape := get_node_or_null("CollisionShape3D") as CollisionShape3D
-	if col_shape:
-		col_shape.shape = shape
-		col_shape.transform = Transform3D.IDENTITY
+	return shape
 
 
 func _collect_mesh_faces(node: Node3D, faces: PackedVector3Array) -> void:
@@ -59,7 +59,6 @@ func _collect_mesh_faces(node: Node3D, faces: PackedVector3Array) -> void:
 			_collect_mesh_faces(child as Node3D, faces)
 
 
-## Pick random tree by position-seeded RNG, instantiate, scale, apply PS1, create collision.
 func _spawn_model() -> void:
 	if TREE_MODELS.is_empty():
 		return
@@ -70,10 +69,64 @@ func _spawn_model() -> void:
 	var idx := randi() % TREE_MODELS.size()
 	var scale_mult := 2.0 + randf_range(-scale_variation, scale_variation)
 
-	var model := TREE_MODELS[idx].instantiate() as Node3D
-	model.scale = Vector3.ONE * model_scale * scale_mult
-	add_child(model)
+	_model = TREE_MODELS[idx].instantiate() as Node3D
+	_model.scale = Vector3.ONE * model_scale * scale_mult
+	add_child(_model)
 	if use_ps1_effect:
-		_apply_ps1_with_original_colors(model)
+		_apply_ps1_with_original_colors(_model)
 
-	_create_trimesh_collision(model)
+	_apply_visibility_range_to_meshes(_model)
+
+
+func activate_physics() -> void:
+	if physics_active:
+		return
+	if not _model:
+		return
+	if get_node_or_null("PhysicsBody"):
+		physics_active = true
+		return
+
+	var body := StaticBody3D.new()
+	body.name = "PhysicsBody"
+	body.collision_layer = 2
+	body.collision_mask = 0
+
+	var shape: Shape3D
+	if _cached_collision_shape:
+		shape = _cached_collision_shape
+	else:
+		shape = _create_trimesh_shape_from_model(_model)
+		if shape:
+			_cached_collision_shape = shape
+
+	if shape:
+		var col := CollisionShape3D.new()
+		col.shape = shape
+		col.transform = Transform3D.IDENTITY
+		body.add_child(col)
+
+	add_child(body)
+	physics_active = true
+
+
+func deactivate_physics() -> void:
+	if not physics_active:
+		return
+	var body := get_node_or_null("PhysicsBody")
+	if body:
+		remove_child(body)
+		body.queue_free()
+	physics_active = false
+
+
+func _apply_visibility_range_to_meshes(node: Node) -> void:
+	var config := get_node_or_null("/root/CullingConfig")
+	var vd: float = config.get("prop_view_distance") if config else view_distance
+	var vdm: float = config.get("prop_view_distance_margin") if config else view_distance_margin
+	if node is MeshInstance3D:
+		var mi := node as MeshInstance3D
+		mi.visibility_range_end = vd
+		mi.visibility_range_end_margin = vdm
+	for child in node.get_children():
+		_apply_visibility_range_to_meshes(child)

@@ -15,4 +15,6 @@ height_max = 800.0
 collision_layer = 2
 collision_mask = 0
 
+[node name="TerrainOccluder" type="OccluderInstance3D" parent="."]
+
 [node name="Props" type="Node3D" parent="."]

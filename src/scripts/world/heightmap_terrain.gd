@@ -12,6 +12,8 @@ extends Node3D
 @export var resolution: int = 1024*4  ## Grid resolution for procedural heightmap
 
 @export var ground_material: Material  ## Applied to terrain mesh; heightmap displacement disabled for baked mesh
+@export var occlusion_enabled: bool = true  ## Create terrain occluder for occlusion culling
+@export var occluder_simplification: int = 16  ## Sample every Nth pixel for occluder (higher = faster, less accurate)
 
 var _heightmap_image: Image
 var _map_width: int
@@ -113,6 +115,9 @@ func _build_terrain() -> void:
 	collision.shape = shape
 	ground.call_deferred("add_child", collision)
 
+	if occlusion_enabled:
+		_build_terrain_occluder()
+
 
 ## Build ArrayMesh from _heightmap_image: vertices with UV, triangles CCW.
 func _create_terrain_mesh() -> ArrayMesh:
@@ -154,6 +159,46 @@ func _create_terrain_mesh() -> ArrayMesh:
 
 	st.generate_normals()
 	return st.commit()
+
+
+## Create ArrayOccluder3D from simplified heightmap and assign to TerrainOccluder.
+func _build_terrain_occluder() -> void:
+	var occluder_node := get_node_or_null("TerrainOccluder") as OccluderInstance3D
+	if not occluder_node:
+		return
+
+	var step := maxi(1, occluder_simplification)
+	var w := int((_map_width - 1) / float(step)) + 1
+	var d := int((_map_depth - 1) / float(step)) + 1
+	if w < 2 or d < 2:
+		return
+
+	var vertices: PackedVector3Array = []
+	var indices: PackedInt32Array = []
+
+	for j in d:
+		for i in w:
+			var pi := mini(i * step, _map_width - 1)
+			var pj := mini(j * step, _map_depth - 1)
+			var u := float(pi) / float(maxi(1, _map_width - 1))
+			var v := float(pj) / float(maxi(1, _map_depth - 1))
+			var x := -_terrain_half + u * terrain_size
+			var z := -_terrain_half + v * terrain_size
+			var brightness := _heightmap_image.get_pixel(pi, pj).r
+			var y := height_min + brightness * _height_scale
+			vertices.append(Vector3(x, y, z))
+
+	for j in d - 1:
+		for i in w - 1:
+			var i0 := j * w + i
+			var i1 := i0 + 1
+			var i2 := i0 + w
+			var i3 := i2 + 1
+			indices.append_array([i0, i1, i3, i0, i3, i2])
+
+	var occluder := ArrayOccluder3D.new()
+	occluder.set_arrays(vertices, indices)
+	occluder_node.occluder = occluder
 
 
 ## Sample height at world X,Z. Converts to UV, clamps, samples pixel brightness. Used by SimulationManager, WorldPopulator, HeightmapSampler.
