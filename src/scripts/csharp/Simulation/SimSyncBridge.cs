@@ -21,12 +21,20 @@ public partial class SimSyncBridge : Node
     [Export] public string AnimalScenePath { get; set; } = "res://scenes/animals/animal_base.tscn";
     [Export] public string PlantScenePath { get; set; } = "res://scenes/plants/plant_base.tscn";
 
+    [ExportGroup("World Populator")]
+    [Export] public int AnimalCount { get; set; } = 2000000;
+    [Export] public int PlantCount { get; set; } = 4000000;
+    [Export] public bool SpawnWholeMap { get; set; } = true;
+    [Export] public float SpawnRadius { get; set; } = 600f;
+    [Export] public float SpawnCenterX { get; set; } = 400f;
+    [Export] public float SpawnCenterZ { get; set; } = 400f;
+    [Export] public float HerbivoreRatio { get; set; } = 0.7f;
+    [Export] public int RandomSeed { get; set; } = -1;
+
     private SimulationGrid _grid;
     private CellProcessor _processor;
     private AnimalStateData[] _animals;
-    private int _animalCount;
     private PlantStateData[] _plants;
-    private int _plantCount;
     private AnimalSpeciesConfig[] _speciesConfigs;
     private HeightmapSampler _heightSampler;
 
@@ -40,13 +48,12 @@ public partial class SimSyncBridge : Node
     private readonly List<int> _toDemoteAnimals = new();
     private readonly List<int> _toDemotePlants = new();
     private readonly List<float> _snapshotBuffer = new();
+    private float[] _snapshotArray = Array.Empty<float>();
 
     private PackedScene _animalScene;
     private PackedScene _plantScene;
 
     private const int HeightmapResolution = 256;
-    private const int InitialAnimalCount = 20;
-    private const int InitialPlantCount = 50;
 
     public override void _Ready()
     {
@@ -80,86 +87,36 @@ public partial class SimSyncBridge : Node
             AnimalSpeciesConfig.CreatePredator(1, AnimalScenePath),
         };
 
-        _animals = new AnimalStateData[InitialAnimalCount];
-        _plants = new PlantStateData[InitialPlantCount];
+        _animals = new AnimalStateData[AnimalCount];
+        _plants = new PlantStateData[PlantCount];
 
-        var rng = new Random();
-        var spawnRadius = 300f;
-        for (var i = 0; i < InitialAnimalCount; i++)
+        var config = new WorldPopulatorConfig
         {
-            _animals[i] = CreateAnimalState(rng, i % 2, spawnRadius);
-        }
-        for (var i = 0; i < InitialPlantCount; i++)
-        {
-            _plants[i] = CreatePlantState(rng, spawnRadius);
-        }
+            AnimalCount = AnimalCount,
+            HerbivoreRatio = HerbivoreRatio,
+            PlantCount = PlantCount,
+            SpawnWholeMap = SpawnWholeMap,
+            SpawnCenterX = SimConfig.WorldOriginX + SpawnCenterX,
+            SpawnCenterZ = SimConfig.WorldOriginZ + SpawnCenterZ,
+            SpawnRadius = SpawnRadius,
+            Seed = RandomSeed >= 0 ? RandomSeed : null,
+            PlantMaxHealth = 3,
+        };
+        WorldPopulator.Populate(
+            _animals, AnimalCount, _plants, PlantCount,
+            config, _speciesConfigs[0], _speciesConfigs[1]);
 
         _grid = new SimulationGrid();
-        _grid.SetData(_animals, InitialAnimalCount, _plants, InitialPlantCount);
+        _grid.SetData(_animals, AnimalCount, _plants, PlantCount);
         _grid.Rebuild();
 
-        _processor = new CellProcessor(_grid, _animals, InitialAnimalCount, _plants, InitialPlantCount);
+        _processor = new CellProcessor(_grid, _animals, AnimalCount, _plants, PlantCount);
 
         _animalScene = GD.Load<PackedScene>(AnimalScenePath);
         _plantScene = GD.Load<PackedScene>(PlantScenePath);
 
         if (_animalScene == null) GD.PrintErr("SimSyncBridge: Failed to load animal scene");
         if (_plantScene == null) GD.PrintErr("SimSyncBridge: Failed to load plant scene");
-    }
-
-    private static AnimalStateData CreateAnimalState(Random rng, int speciesId, float spawnRadius = 8192f)
-    {
-        var config = speciesId == 0
-            ? AnimalSpeciesConfig.CreateHerbivore(0)
-            : AnimalSpeciesConfig.CreatePredator(1);
-        var cx = SimConfig.WorldOriginX + 200f;
-        var cz = SimConfig.WorldOriginZ + 200f;
-        var x = cx + (float)((rng.NextDouble() * 2 - 1) * spawnRadius);
-        var z = cz + (float)((rng.NextDouble() * 2 - 1) * spawnRadius);
-        x = Mathf.Clamp(x, SimConfig.WorldOriginX, SimConfig.WorldOriginX + SimConfig.WorldSizeXZ - 1);
-        z = Mathf.Clamp(z, SimConfig.WorldOriginZ, SimConfig.WorldOriginZ + SimConfig.WorldSizeXZ - 1);
-        return new AnimalStateData
-        {
-            Position = new Vector3(x, 0, z),
-            Velocity = Vector3.Zero,
-            State = 0,
-            SpeciesId = speciesId,
-            Health = 100,
-            CellX = 0,
-            CellZ = 0,
-            PanicTimer = 0,
-            WanderTimer = 0,
-            WanderTarget = new Vector3(x, 0, z),
-            ThreatPosition = Vector3.Zero,
-            WanderSpeed = config.WanderSpeed,
-            PanicSpeed = config.PanicSpeed,
-            SocialFactor = config.SocialFactor,
-            CohesionRadius = config.CohesionRadius,
-            ContagionRadius = config.ContagionRadius,
-            PanicDuration = config.PanicDuration,
-            WanderPauseMin = config.WanderPauseMin,
-            WanderPauseMax = config.WanderPauseMax,
-            WanderRadius = config.WanderRadius,
-        };
-    }
-
-    private static PlantStateData CreatePlantState(Random rng, float spawnRadius = 8192f)
-    {
-        var cx = SimConfig.WorldOriginX + 200f;
-        var cz = SimConfig.WorldOriginZ + 200f;
-        var x = cx + (float)((rng.NextDouble() * 2 - 1) * spawnRadius);
-        var z = cz + (float)((rng.NextDouble() * 2 - 1) * spawnRadius);
-        x = Mathf.Clamp(x, SimConfig.WorldOriginX, SimConfig.WorldOriginX + SimConfig.WorldSizeXZ - 1);
-        z = Mathf.Clamp(z, SimConfig.WorldOriginZ, SimConfig.WorldOriginZ + SimConfig.WorldSizeXZ - 1);
-        return new PlantStateData
-        {
-            Position = new Vector3(x, 0, z),
-            CellX = 0,
-            CellZ = 0,
-            Health = 3,
-            MaxHealth = 3,
-            SpeciesId = 0,
-        };
     }
 
     public override void _PhysicsProcess(double delta)
@@ -177,7 +134,7 @@ public partial class SimSyncBridge : Node
         foreach (var kv in _promotedAnimals)
         {
             var i = kv.Key;
-            if (i >= _animalCount) continue;
+            if (i >= AnimalCount) continue;
             var dist = SimulationGrid.ManhattanDistance(
                 _animals[i].CellX, _animals[i].CellZ,
                 playerCell.CellX, playerCell.CellZ);
@@ -198,7 +155,7 @@ public partial class SimSyncBridge : Node
         foreach (var kv in _promotedPlants)
         {
             var i = kv.Key;
-            if (i >= _plantCount) continue;
+            if (i >= PlantCount) continue;
             if (_plants[i].IsConsumed) { _toDemotePlants.Add(i); continue; }
             var dist = SimulationGrid.ManhattanDistance(
                 _plants[i].CellX, _plants[i].CellZ,
@@ -216,7 +173,7 @@ public partial class SimSyncBridge : Node
             }
         }
 
-        for (var i = 0; i < _animalCount; i++)
+        for (var i = 0; i < AnimalCount; i++)
         {
             var dist = SimulationGrid.ManhattanDistance(
                 _animals[i].CellX, _animals[i].CellZ,
@@ -230,7 +187,7 @@ public partial class SimSyncBridge : Node
             }
         }
 
-        for (var i = 0; i < _plantCount; i++)
+        for (var i = 0; i < PlantCount; i++)
         {
             if (_plants[i].IsConsumed) continue;
             var dist = SimulationGrid.ManhattanDistance(
@@ -310,14 +267,16 @@ public partial class SimSyncBridge : Node
         _grid?.GetSnapshot(outBuffer);
     }
 
-    /// <summary>Returns snapshot as float[] for GDScript (e.g. debug overlay). Packed as [x, z, isAnimal, speciesId, ...].</summary>
+    /// <summary>Returns snapshot as float[] for GDScript (e.g. debug overlay). Packed as [x, z, isAnimal, speciesId, ...]. Reuses internal buffer to avoid GC pressure.</summary>
     public float[] GetSnapshotArray()
     {
         _snapshotBuffer.Clear();
         _grid?.GetSnapshot(_snapshotBuffer);
-        var arr = new float[_snapshotBuffer.Count];
-        for (var i = 0; i < _snapshotBuffer.Count; i++)
-            arr[i] = _snapshotBuffer[i];
-        return arr;
+        var count = _snapshotBuffer.Count;
+        if (_snapshotArray.Length != count)
+            _snapshotArray = new float[count];
+        for (var i = 0; i < count; i++)
+            _snapshotArray[i] = _snapshotBuffer[i];
+        return _snapshotArray;
     }
 }

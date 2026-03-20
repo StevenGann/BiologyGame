@@ -1,6 +1,7 @@
-[gd_scene load_steps=2 format=3 uid="uid://bxy7debug01"]
+[gd_scene load_steps=3 format=3 uid="uid://bxy7debug01"]
 
 [ext_resource type="Script" path="res://scripts/ui/debug_overlay.gd" id="1_script"]
+[ext_resource type="Script" path="res://scripts/ui/debug_overlay_draw.gd" id="2_script"]
 
 [node name="DebugOverlay" type="CanvasLayer"]
 
@@ -17,3 +18,26 @@ offset_right = -16.0
 offset_bottom = 272.0
 grow_horizontal = 0
 script = ExtResource("1_script")
+
+[node name="SubViewportContainer" type="SubViewportContainer" parent="Minimap"]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+stretch = true
+
+[node name="SubViewport" type="SubViewport" parent="Minimap/SubViewportContainer"]
+handle_input_locally = false
+size = Vector2i(128, 128)
+render_target_update_mode = 4
+
+[node name="DrawControl" type="Control" parent="Minimap/SubViewportContainer/SubViewport"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("2_script")
