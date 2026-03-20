@@ -1,6 +1,8 @@
 using System;
 using System.Collections.Generic;
 using Godot;
+using BiologyGame.Animals;
+using BiologyGame.Plants;
 
 namespace BiologyGame.Simulation;
 
@@ -249,11 +251,15 @@ public partial class SimSyncBridge : Node
         ref var state = ref _animals[i];
         var node = _animalScene.Instantiate<Node3D>();
         var h = _heightSampler?.SampleHeight(state.Position.X, state.Position.Z) ?? 0;
-        node.GlobalPosition = new Vector3(state.Position.X, h + 0.4f, state.Position.Z);
+        var pos = new Vector3(state.Position.X, h + 0.4f, state.Position.Z);
         node.SetMeta("sim_index", i);
         node.SetMeta("is_animal", true);
         _animalsContainer.AddChild(node);
         _promotedAnimals[i] = node;
+        if (node is AnimalNode animalNode)
+            animalNode.ApplyState(pos, state.Velocity, state.SpeciesId);
+        else
+            node.GlobalPosition = pos;
     }
 
     private void PromotePlant(int i)
@@ -262,11 +268,15 @@ public partial class SimSyncBridge : Node
         ref var plant = ref _plants[i];
         var node = _plantScene.Instantiate<Node3D>();
         var h = _heightSampler?.SampleHeight(plant.Position.X, plant.Position.Z) ?? 0;
-        node.GlobalPosition = new Vector3(plant.Position.X, h + 0.4f, plant.Position.Z);
+        var pos = new Vector3(plant.Position.X, h + 0.4f, plant.Position.Z);
         node.SetMeta("sim_index", i);
         node.SetMeta("is_animal", false);
         _plantsContainer.AddChild(node);
         _promotedPlants[i] = node;
+        if (node is PlantNode plantNode)
+            plantNode.ApplyState(pos, !plant.IsConsumed);
+        else
+            node.GlobalPosition = pos;
     }
 
     private void SyncAnimal(int i)
@@ -274,7 +284,11 @@ public partial class SimSyncBridge : Node
         if (!_promotedAnimals.TryGetValue(i, out var node)) return;
         ref var state = ref _animals[i];
         var h = _heightSampler?.SampleHeight(state.Position.X, state.Position.Z) ?? 0;
-        node.GlobalPosition = new Vector3(state.Position.X, h + 0.4f, state.Position.Z);
+        var pos = new Vector3(state.Position.X, h + 0.4f, state.Position.Z);
+        if (node is AnimalNode animalNode)
+            animalNode.ApplyState(pos, state.Velocity, state.SpeciesId);
+        else
+            node.GlobalPosition = pos;
     }
 
     private void SyncPlant(int i)
@@ -282,7 +296,11 @@ public partial class SimSyncBridge : Node
         if (!_promotedPlants.TryGetValue(i, out var node)) return;
         ref var plant = ref _plants[i];
         var h = _heightSampler?.SampleHeight(plant.Position.X, plant.Position.Z) ?? 0;
-        node.GlobalPosition = new Vector3(plant.Position.X, h + 0.4f, plant.Position.Z);
+        var pos = new Vector3(plant.Position.X, h + 0.4f, plant.Position.Z);
+        if (node is PlantNode plantNode)
+            plantNode.ApplyState(pos, !plant.IsConsumed);
+        else
+            node.GlobalPosition = pos;
     }
 
     /// <summary>Thread-safe snapshot for debug overlay. Packed as [x, z, isAnimal, speciesId, ...].</summary>
