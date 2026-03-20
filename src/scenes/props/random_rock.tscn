@@ -1,7 +1,0 @@
-[gd_scene load_steps=2 format=3 uid="uid://c5yl3n9oqr8sx"]
-
-[ext_resource type="Script" path="res://scripts/props/random_rock.gd" id="1_script"]
-
-[node name="RandomRock" type="Node3D"]
-script = ExtResource("1_script")
-use_ps1_effect = true

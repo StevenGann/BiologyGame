@@ -1,7 +1,0 @@
-[gd_resource type="ShaderMaterial" load_steps=2 format=3 uid="uid://c2y9rn3o8il5q"]
-
-[ext_resource type="Shader" path="res://shaders/ps1_style.gdshader" id="1_shader"]
-
-[resource]
-shader = ExtResource("1_shader")
-shader_parameter/albedo_color = Color(0.4, 0.45, 0.35, 1)
