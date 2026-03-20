@@ -47,4 +47,10 @@ public static class SimConfig
 
     /// <summary>Plant respawn: health points per second when Health == 0 (slower regrowth from consumed).</summary>
     public const float PlantRespawnRate = 0.05f;
+
+    /// <summary>Delta multiplier for tier 3 (low-res sim). Tier 2 uses 1.5, tier 1 uses 1.0.</summary>
+    public const float LOD_Tier3_DeltaMultiplier = 2.0f;
+
+    /// <summary>Delta multiplier for tier 2 (simplified sim).</summary>
+    public const float LOD_Tier2_DeltaMultiplier = 1.5f;
 }

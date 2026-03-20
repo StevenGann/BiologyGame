@@ -83,7 +83,6 @@ public class SimulationGrid
 
             for (var i = 0; i < _plantCount; i++)
             {
-                if (_plants[i].IsConsumed) continue;
                 var pos = _plants[i].Position;
                 var (cx, cz) = CellFromWorld(pos.X, pos.Z);
                 _plants[i].CellX = cx;
@@ -249,6 +248,34 @@ public class SimulationGrid
                 outBuffer.Add(p.Z);
                 outBuffer.Add(0f);
                 outBuffer.Add((float)_plants[i].SpeciesId);
+            }
+        }
+    }
+
+    /// <summary>Fill outIndices with animal indices in the given cell. Clears list first.</summary>
+    public void GetAnimalIndicesInCell(int cx, int cz, List<int> outIndices)
+    {
+        outIndices.Clear();
+        if (cx < 0 || cx >= SimConfig.GridN || cz < 0 || cz >= SimConfig.GridN) return;
+        lock (_lock)
+        {
+            foreach (var i in _animalCells[cx, cz])
+                if (i < _animalCount)
+                    outIndices.Add(i);
+        }
+    }
+
+    /// <summary>Fill outIndices with plant indices in the given cell (includes consumed for regrowth). Clears list first.</summary>
+    public void GetPlantIndicesInCell(int cx, int cz, List<int> outIndices)
+    {
+        outIndices.Clear();
+        if (cx < 0 || cx >= SimConfig.GridN || cz < 0 || cz >= SimConfig.GridN) return;
+        lock (_lock)
+        {
+            foreach (var i in _plantCells[cx, cz])
+            {
+                if (i >= _plantCount) continue;
+                outIndices.Add(i);
             }
         }
     }
