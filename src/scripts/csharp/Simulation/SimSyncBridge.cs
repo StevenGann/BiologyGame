@@ -50,6 +50,7 @@ public partial class SimSyncBridge : Node
 
     public override void _Ready()
     {
+        AddToGroup("sim_bridge");
         _animalsContainer = GetNodeOrNull<Node3D>(AnimalsContainerPath);
         _plantsContainer = GetNodeOrNull<Node3D>(PlantsContainerPath);
         _terrainNode = GetNodeOrNull(TerrainPath);
@@ -307,5 +308,16 @@ public partial class SimSyncBridge : Node
     public void GetSnapshot(List<float> outBuffer)
     {
         _grid?.GetSnapshot(outBuffer);
+    }
+
+    /// <summary>Returns snapshot as float[] for GDScript (e.g. debug overlay). Packed as [x, z, isAnimal, speciesId, ...].</summary>
+    public float[] GetSnapshotArray()
+    {
+        _snapshotBuffer.Clear();
+        _grid?.GetSnapshot(_snapshotBuffer);
+        var arr = new float[_snapshotBuffer.Count];
+        for (var i = 0; i < _snapshotBuffer.Count; i++)
+            arr[i] = _snapshotBuffer[i];
+        return arr;
     }
 }
