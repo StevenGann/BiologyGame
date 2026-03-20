@@ -30,6 +30,12 @@ public static class SimConfig
     /// <summary>Half-extent from world origin. For centered terrain: WorldSizeXZ * 0.5.</summary>
     public const float HalfExtentXZ = WorldSizeXZ * 0.5f;
 
+    /// <summary>World X of min corner (e.g. 0 for 0..N, or -HalfExtentXZ for centered).</summary>
+    public const float WorldOriginX = 0f;
+
+    /// <summary>World Z of min corner.</summary>
+    public const float WorldOriginZ = 0f;
+
     /// <summary>Cell size in world units. WorldSizeXZ / GridN.</summary>
     public static readonly float CellSizeMeters = WorldSizeXZ / GridN;
 
