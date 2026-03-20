@@ -1,0 +1,10 @@
+[gd_scene load_steps=2 format=3 uid="uid://bxy7animal001"]
+
+[sub_resource type="BoxMesh" id="BoxMesh_animal"]
+size = Vector3(0.6, 0.8, 1.2)
+
+[node name="AnimalBase" type="Node3D"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+mesh = SubResource("BoxMesh_animal")

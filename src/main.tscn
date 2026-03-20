@@ -1,7 +1,8 @@
-[gd_scene load_steps=4 format=3 uid="uid://cnyotb0ghrvhi"]
+[gd_scene load_steps=5 format=3 uid="uid://cnyotb0ghrvhi"]
 
 [ext_resource type="PackedScene" uid="uid://bwx8y7k2terrain1" path="res://scenes/world/world_terrain.tscn" id="1_world_terrain"]
 [ext_resource type="PackedScene" uid="uid://c4fpsplayer001" path="res://scenes/player/fps_player.tscn" id="2_fps_player"]
+[ext_resource type="Script" path="res://scripts/csharp/Simulation/SimSyncBridge.cs" id="3_bridge"]
 
 [sub_resource type="Environment" id="Environment_main"]
 background_mode = 1
@@ -17,8 +18,19 @@ environment = SubResource("Environment_main")
 
 [node name="WorldTerrain" parent="." instance=ExtResource("1_world_terrain")]
 
+[node name="Animals" type="Node3D" parent="."]
+
+[node name="Plants" type="Node3D" parent="."]
+
 [node name="FPSPlayer" parent="." instance=ExtResource("2_fps_player")]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 400, 0)
+
+[node name="SimSyncBridge" type="Node" parent="."]
+script = ExtResource("3_bridge")
+AnimalsContainerPath = NodePath("../Animals")
+PlantsContainerPath = NodePath("../Plants")
+TerrainPath = NodePath("../WorldTerrain")
+PlayerPath = NodePath("../FPSPlayer")
 
 [node name="DirectionalLight3D" type="DirectionalLight3D" parent="."]
 transform = Transform3D(0.866025, -0.353553, 0.353553, 0, 0.707107, 0.707107, -0.5, -0.612372, 0.612372, 0, 800, 0)

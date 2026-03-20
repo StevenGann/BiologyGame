@@ -1,0 +1,12 @@
+[gd_scene load_steps=3 format=3 uid="uid://bxy7plant001"]
+
+[sub_resource type="CylinderMesh" id="CylinderMesh_plant"]
+top_radius = 0.15
+bottom_radius = 0.2
+height = 0.8
+
+[node name="PlantBase" type="Node3D"]
+
+[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
+transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
+mesh = SubResource("CylinderMesh_plant")

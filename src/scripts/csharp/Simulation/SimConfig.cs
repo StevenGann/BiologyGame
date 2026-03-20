@@ -53,4 +53,7 @@ public static class SimConfig
 
     /// <summary>Delta multiplier for tier 2 (simplified sim).</summary>
     public const float LOD_Tier2_DeltaMultiplier = 1.5f;
+
+    /// <summary>Extra cells beyond LOD_A for demote threshold. Demote when distance &gt; A + this.</summary>
+    public const int LOD_HysteresisCells = 1;
 }
