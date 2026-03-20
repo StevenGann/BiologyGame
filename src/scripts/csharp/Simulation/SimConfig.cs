@@ -1,0 +1,38 @@
+namespace BiologyGame.Simulation;
+
+/// <summary>
+/// Simulation parameters: grid size, LOD thresholds, world bounds, thread pool hints.
+/// Tune N, M, A/B/C/D for performance.
+/// </summary>
+public static class SimConfig
+{
+    /// <summary>Grid dimension N (N×N cells). Configurable for optimization.</summary>
+    public const int GridN = 32;
+
+    /// <summary>Interval (seconds) between cell-boundary checks and entity transfers.</summary>
+    public const float TransferIntervalSeconds = 3.0f;
+
+    /// <summary>Manhattan cell distance &lt; A: full sim + Godot sync every tick.</summary>
+    public const int LOD_A_Cells = 2;
+
+    /// <summary>Manhattan cell distance &lt; B: full sim async, no Godot.</summary>
+    public const int LOD_B_Cells = 4;
+
+    /// <summary>Manhattan cell distance &lt; C: simplified sim.</summary>
+    public const int LOD_C_Cells = 8;
+
+    /// <summary>Manhattan cell distance &lt; D: low-res sim (larger delta).</summary>
+    public const int LOD_D_Cells = 16;
+
+    /// <summary>Lateral world size in meters (X and Z). From WorldConstants.</summary>
+    public const float WorldSizeXZ = 8192.0f;
+
+    /// <summary>Half-extent from world origin. For centered terrain: WorldSizeXZ * 0.5.</summary>
+    public const float HalfExtentXZ = WorldSizeXZ * 0.5f;
+
+    /// <summary>Cell size in world units. WorldSizeXZ / GridN.</summary>
+    public static readonly float CellSizeMeters = WorldSizeXZ / GridN;
+
+    /// <summary>Thread count for cell processor pool. Use Environment.ProcessorCount or less.</summary>
+    public static int ThreadPoolSize => System.Environment.ProcessorCount > 0 ? System.Environment.ProcessorCount - 1 : 4;
+}
