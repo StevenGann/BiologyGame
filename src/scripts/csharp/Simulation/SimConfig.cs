@@ -41,4 +41,10 @@ public static class SimConfig
 
     /// <summary>Thread count for cell processor pool. Use Environment.ProcessorCount or less.</summary>
     public static int ThreadPoolSize => System.Environment.ProcessorCount > 0 ? System.Environment.ProcessorCount - 1 : 4;
+
+    /// <summary>Plant regrowth: health points per second when 0 &lt; Health &lt; MaxHealth.</summary>
+    public const float PlantRegrowthRate = 0.2f;
+
+    /// <summary>Plant respawn: health points per second when Health == 0 (slower regrowth from consumed).</summary>
+    public const float PlantRespawnRate = 0.05f;
 }

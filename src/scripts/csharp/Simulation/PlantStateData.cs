@@ -26,6 +26,9 @@ public struct PlantStateData
     /// <summary>Species ID for model/scene selection on promote.</summary>
     public int SpeciesId;
 
+    /// <summary>Accumulated fractional health for regrowth. Internal to PlantLogic.</summary>
+    public float RegrowthAccumulator;
+
     /// <summary>True when Health &lt;= 0 (no longer available for consumption).</summary>
     public readonly bool IsConsumed => Health <= 0;
 }
