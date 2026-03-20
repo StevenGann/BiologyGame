@@ -1,185 +1,141 @@
 # Simulation System
 
-The simulation system manages spatial partitioning, LOD (Level of Detail), and efficient simulation of animals and plants at various distances from the player.
+The simulation manages spatial partitioning, LOD (Level of Detail), and efficient simulation of animals and plants across a 32×32 grid over an 8192×8192 m world.
 
 ## LOD Tiers
 
-Animals are categorized into three LOD tiers based on distance from the player:
+Cells are assigned LOD tiers based on Manhattan distance from the player cell:
 
 ```mermaid
 graph LR
-    subgraph LOD[LOD Tiers by Distance]
-        A[FULL &lt; 30m]
-        B[MEDIUM 30-90m]
-        C[FAR &gt; 90m]
+    subgraph LOD[LOD Tiers by Cell Distance]
+        T0["Tier 0: dist ≤ 2"]
+        T1["Tier 1: dist ≤ 4"]
+        T2["Tier 2: dist ≤ 8"]
+        T3["Tier 3: dist ≤ 16"]
     end
-    
-    Player((Player))
-    Player --> A
-    A --> B
-    B --> C
+
+    Player((Player Cell))
+    Player --> T0
+    T0 --> T1
+    T1 --> T2
+    T2 --> T3
 ```
 
-| Tier | Distance | AI | Movement | Social (Cohesion/Contagion) |
-|------|----------|-----|----------|-----------------------------|
-| **FULL** | &lt; 30 m | Full update | Full update | Yes |
-| **MEDIUM** | 30–90 m | Simplified, reduced tick rate | Simplified | No |
-| **FAR** | &gt; 90 m | `process_far_tick` or async sim | Reduced tick rate | Yes (simplified) |
+| Tier | Manhattan Distance | Simulation | Godot Nodes |
+|------|--------------------|------------|-------------|
+| **0** | ≤ 2 cells | Full, every tick | Yes (AnimalNode, PlantNode) |
+| **1** | ≤ 4 cells | Full, delta ×1.0 | No |
+| **2** | ≤ 8 cells | Simplified, delta ×1.5 | No |
+| **3** | ≤ 16 cells | Low-res, delta ×2.0 | No |
+| Beyond | > 16 cells | Not simulated | No |
 
-## LOD Tick Intervals
+## Promotion and Demotion
 
-Tick rates are throttled per tier to reduce CPU load:
+```mermaid
+stateDiagram-v2
+    [*] --> InGrid: WorldPopulator spawn
+    InGrid --> HasNode: Player within LOD_A (2 cells)
+    HasNode --> InGrid: Player beyond LOD_A + Hysteresis (3 cells)
+```
 
-| Tier | AI Interval (frames) | Move Interval (frames) |
-|------|----------------------|------------------------|
-| FULL | 30 | 10 |
-| MEDIUM | 90 | 30 |
-| FAR | 1500 | 100 |
+- **Promote**: Entity within LOD_A cells of player → create AnimalNode/PlantNode, add to scene.
+- **Demote**: Entity beyond LOD_A + LOD_HysteresisCells → remove node, keep state in grid.
 
-`should_ai_tick_this_frame(lod, instance_id)` and `should_movement_tick_this_frame(lod, instance_id)` use `(frame_counter + instance_id) % interval == 0` to stagger updates across animals.
+Hysteresis prevents thrashing at the boundary.
 
 ## Spatial Grid
 
-SimulationManager and FarSpatialGrid use a uniform grid for efficient radius queries.
-
 ```mermaid
 flowchart TB
-    subgraph Grid[Spatial Grid CELL_SIZE=24]
-        C1[Cell 0,0]
-        C2[Cell 1,0]
-        C3[Cell 0,1]
-        C4[Cell 1,1]
-        C5[...]
+    subgraph Grid[SimulationGrid 32×32]
+        C00[Cell 0,0]
+        C10[Cell 1,0]
+        C01[Cell 0,1]
+        Cnn["..."]
     end
-    
-    Animals[Animals/Plants] --> Rebuild[Rebuild every N frames]
+
+    Animals[AnimalStateData array]
+    Plants[PlantStateData array]
+    Animals --> Rebuild[Rebuild]
+    Plants --> Rebuild
     Rebuild --> Grid
-    Grid --> get_animals_in_radius
-    Grid --> get_same_species_in_radius
-    Grid --> get_hunters_in_radius
-    Grid --> get_plants_in_radius
+    Grid --> NeighborQueries[GetAnimalIndicesInCell etc]
 ```
 
 ### Grid API
 
 | Method | Purpose |
 |--------|---------|
-| `get_animals_in_radius(center, radius, exclude)` | All animals in radius |
-| `get_same_species_in_radius(center, radius, species, exclude)` | Same-species for cohesion/contagion |
-| `get_hunters_in_radius(center, radius)` | Hunters for forager threat detection |
-| `get_plants_in_radius(center, radius)` | Non-consumed plants for foragers |
+| `Rebuild()` | Clear and reassign all entities to cells |
+| `ProcessTransfers()` | Move entities that crossed cell boundaries |
+| `GetAnimalIndicesInCell(cx, cz)` | Animal indices in cell |
+| `GetPlantIndicesInCell(cx, cz)` | Plant indices in cell |
+| `GetSnapshot(outBuffer)` | Pack [x, z, isAnimal, speciesId, ...] for debug overlay |
 
-Grid is rebuilt every `grid_rebuild_interval` frames (default 4).
+### Configuration (SimConfig)
 
-## FAR Simulation Flow
+| Constant | Value | Description |
+|----------|-------|-------------|
+| GridN | 32 | Grid dimension |
+| TransferIntervalSeconds | 3.0 | Interval for ProcessTransfers |
+| LOD_A_Cells | 2 | Promote threshold |
+| LOD_HysteresisCells | 1 | Demote = A + 1 |
+| WorldSizeXZ | 8192 | World extent (m) |
 
-FAR animals have two execution paths:
+## CellProcessor
 
-1. **In-scene FAR**: `physics_process` disabled; SimulationManager calls `process_far_tick(delta, ai_tick, move_tick)`.
-2. **Async FAR**: FarSimBridge demotes animals beyond 95 m into FarAnimalSim; promotes back when within 85 m.
-
-```mermaid
-stateDiagram-v2
-    [*] --> FULL: Player approaches
-    FULL --> MEDIUM: Distance 30-90m
-    MEDIUM --> FULL: Player approaches
-    MEDIUM --> FAR: Distance >90m
-    FAR --> MEDIUM: Player approaches (<85m)
-    
-    state FAR {
-        [*] --> InScene: In scene tree
-        InScene --> Async: Distance >95m (demote)
-        Async --> InScene: Distance <85m (promote)
-    }
-```
-
-## FarSimBridge
-
-```mermaid
-flowchart TB
-    subgraph Main[Main Thread]
-        Bridge[FarSimBridge]
-        Animals[Animals Node]
-        Terrain[TestTerrain]
-        Heightmap[HeightmapSampler]
-    end
-    
-    subgraph Worker[Worker Thread]
-        FarSim[FarAnimalSim]
-    end
-    
-    Bridge --> Demote[Demote animals >95m]
-    Demote --> FarSim
-    FarSim --> PromoteQueue[Promotion Queue]
-    Bridge --> Promote[Promote when <85m]
-    PromoteQueue --> Promote
-    Promote --> Animals
-    
-    Terrain --> Heightmap
-    Heightmap --> FarSim
-```
-
-### Demotion
-
-- Every physics frame, FarSimBridge checks each animal in the scene.
-- If `distance(player, animal) > DemoteRadius` (95 m): export `AnimalStateData`, enqueue to FarAnimalSim, remove from scene, `QueueFree()`.
-
-### Promotion
-
-- FarAnimalSim runs at 20 Hz on a worker thread.
-- Each tick, animals with `distance(player, animal) < 85` are enqueued for promotion.
-- Every `ReviewIntervalSeconds` (20 s), FarSimBridge drains the promotion queue and instantiates animals back into the scene.
-- `HeightmapSampler.SampleHeight()` provides Y for placement (worker-safe).
-
-## AnimalLogic (Shared FAR Logic)
-
-`AnimalLogic` is a static C# class with **no Godot dependencies**. Used by:
-
-- `AnimalBase.ProcessFarTick()` (in-scene FAR)
-- `FarAnimalSim` (async FAR)
+Drives simulation by iterating cells by LOD tier:
 
 ```mermaid
 flowchart LR
-    AnimalLogic[AnimalLogic]
-    AnimalLogic --> UpdateStateFar[UpdateStateFar]
-    AnimalLogic --> ApplySimpleWander[ApplySimpleWander]
-    
-    AnimalBase[AnimalBase] --> AnimalLogic
-    FarAnimalSim[FarAnimalSim] --> AnimalLogic
+    Tick[CellProcessor.Tick]
+    Tick --> PlayerCell[Compute player cell]
+    PlayerCell --> Tier0[Process tier 0 cells]
+    Tier0 --> Tier1[Process tier 1 cells]
+    Tier1 --> Tier2[Process tier 2 cells]
+    Tier2 --> Tier3[Process tier 3 cells]
+    Tier3 --> Transfers[ProcessTransfers if interval]
 ```
 
-### UpdateStateFar
+- Tier 0: Full AnimalLogic + PlantLogic; SimSyncBridge syncs positions to nodes.
+- Tiers 1–3: Same logic with delta multipliers; no Godot nodes.
 
-- Contagion: nearby panicking animals can spread panic.
-- Panic decay: panic timer decreases; when zero, switch to wander.
-- Wander target refresh when arriving at target.
+## AnimalLogic
 
-### ApplySimpleWander
+Pure C# logic; no Godot APIs. Used by CellProcessor for all tiers.
 
-- Panic: move away from threat.
-- Wander: move toward `WanderTarget`, apply cohesion.
-- Uses `AnimalStateData` (pure struct) for all state.
+```mermaid
+flowchart LR
+    UpdateStateFar[UpdateStateFar]
+    ApplySimpleWander[ApplySimpleWander]
 
-## AnimalStateData
+    UpdateStateFar --> Contagion[Contagion: panic spread]
+    UpdateStateFar --> PanicDecay[Panic decay]
+    UpdateStateFar --> WanderTarget[Wander target refresh]
 
-Shared struct for demotion/promotion and FAR simulation:
+    ApplySimpleWander --> PanicMove[Panic: flee threat]
+    ApplySimpleWander --> WanderMove[Wander: move to target + cohesion]
+```
 
-| Field | Type | Description |
-|-------|------|-------------|
-| Position, Velocity | Vector3 | Transform and movement |
-| State | int | 0=Wander, 1=Panic |
-| Species | int | Bison=0, Deer=1, Rabbit=2, Wolf=3, Bear=4 |
-| Health | int | For promotion restoration |
-| PanicTimer, WanderTimer | float | State timers |
-| WanderTarget, ThreatPosition | Vector3 | AI targets |
-| WanderSpeed, PanicSpeed, etc. | float | Per-type parameters |
+### Behaviors
 
-## Debug Mode
+- **Contagion**: Nearby panicking same-species can spread panic; nearby calm can shorten panic.
+- **Panic**: Flee from `ThreatPosition`; decay timer.
+- **Wander**: Move toward random target; pause; cohesion toward same-species center.
 
-Press **` (backtick)** to toggle debug mode. When enabled, SimulationManager shows:
+## PlantLogic
 
-- LOD tier and state on animal labels
-- Threat lines (red)
-- Cohesion lines (green)
-- Detection radii (yellow/cyan)
-- Hunter–prey and forager–plant lines
+- **Regrowth**: Health < MaxHealth → increase at PlantRegrowthRate.
+- **Respawn**: Health == 0 → increase at PlantRespawnRate.
+- **Consumed**: IsConsumed plants excluded from spatial queries.
+
+## Debug Overlay
+
+Press **F1** or **`** to toggle. Shows:
+
+- LOD grid (tier 0 green, tier 1 yellow, tier 2 orange, tier 3 red)
+- Animal and plant dots (sampled, capped)
+- Player position (cyan)
+
+Optimizations: throttled redraws, SubViewport at lower resolution, snapshot buffer reuse.

@@ -1,182 +1,110 @@
-# Animals
+# Animals and Plants
 
-This document covers animal species, AI behaviors, and the class hierarchy.
+Species configuration, AnimalNode/PlantNode presentation, and shared simulation state.
 
 ## Species
 
+Two species are configured in SimSyncBridge:
+
 ```mermaid
 pie showData
-    title Species Distribution (WorldPopulator defaults)
-    "Deer (forager)" : 500
-    "Rabbit (forager)" : 250
-    "Bison (forager)" : 0
-    "Wolf (hunter)" : 125
-    "Bear (hunter)" : 125
+    title Default Distribution
+    "Herbivore" : 70
+    "Predator" : 30
 ```
 
-| ID | Species | Type | Notes |
-|----|---------|------|-------|
-| 0 | Bison | Forager | Default base animal |
-| 1 | Deer | Forager | Eats plants, flees hunters |
-| 2 | Rabbit | Forager | Eats plants, flees hunters |
-| 3 | Wolf | Hunter | Stalks, chases, kills prey |
-| 4 | Bear | Hunter | Stalks, chases, kills prey |
+| ID | Type | Description |
+|----|------|-------------|
+| 0 | Herbivore | Eats plants; wanders; panics from contagion |
+| 1 | Predator | Same base logic; different speed/radius presets |
 
-Species IDs are defined in `species_constants.gd` and `AnimalBase.Species` (C#) and must match.
+Ratio controlled by `HerbivoreRatio` export (default 0.7).
 
-## Class Hierarchy
+## AnimalSpeciesConfig
 
 ```mermaid
 classDiagram
-    CharacterBody3D <|-- AnimalBase
-    AnimalBase <|-- ForagerAnimal
-    AnimalBase <|-- HunterAnimal
-    
-    class CharacterBody3D {
-        +Velocity
-        +MoveAndSlide()
-    }
-    
-    class AnimalBase {
-        +Species species
-        +State _state
-        +int Health
+    class AnimalSpeciesConfig {
+        +int Id
+        +bool IsPredator
         +float WanderSpeed
         +float PanicSpeed
-        +float DetectionRange
+        +float SocialFactor
         +float CohesionRadius
         +float ContagionRadius
-        +UpdateState(delta)
-        +ApplyMovement(delta)
-        +ProcessFarTick(delta, ai, move)
-        +TakeDamage(amount)
-        +ExportStateData()
-        +ApplyStateData(state)
-    }
-    
-    class ForagerAnimal {
-        +PlantDetectionRange
-        +HunterDetectionRange
-        +HunterSafeDistance
-        +EatingDuration
-        -ForagerState _foragerState
-        -Node3D _currentPlant
-        +UpdateState(delta)
-        +ApplyMovement(delta)
-    }
-    
-    class HunterAnimal {
-        +StalkSpeed
-        +ChaseSpeed
-        +ChaseTriggerRange
-        +KillRange
-        +KillDamage
-        -HunterState _hunterState
-        -CharacterBody3D _currentTarget
-        +UpdateState(delta)
-        +ApplyMovement(delta)
+        +float PanicDuration
+        +float WanderPauseMin
+        +float WanderPauseMax
+        +float WanderRadius
+        +string ScenePath
     }
 ```
 
-## AnimalBase States
+Presets: `CreateHerbivore()`, `CreatePredator()`. Tune in `SimSyncBridge._Ready()`.
+
+## AnimalStateData
+
+Shared struct for simulation; no Godot types:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| Position, Velocity | Vector3 | Transform and movement |
+| State | int | 0=Wander, 1=Panic |
+| SpeciesId | int | 0=herbivore, 1=predator |
+| CellX, CellZ | int | Grid cell |
+| PanicTimer, WanderTimer | float | State timers |
+| WanderTarget, ThreatPosition | Vector3 | AI targets |
+| WanderSpeed, PanicSpeed, etc. | float | From species config |
+
+## AnimalNode
+
+Thin Godot wrapper for promoted animals:
 
 ```mermaid
-stateDiagram-v2
-    [*] --> Wandering
-    Wandering --> Panicking: Threat detected (player/hunter)
-    Panicking --> Wandering: PanicTimer expires
-    Panicking --> Wandering: Contagion calm (social)
+flowchart LR
+    SimSyncBridge[SimSyncBridge]
+    SimSyncBridge --> ApplyState[ApplyState]
+    ApplyState --> Position[GlobalPosition]
+    ApplyState --> LookAt[LookAt velocity]
 ```
 
-### Base Behaviors
+- **ApplyState(worldPosition, velocity, speciesId)**: Set position; orient mesh toward movement direction.
+- No simulation logic; receives state from SimSyncBridge each sync.
 
-- **Wandering**: Pick random target within `WanderRadius`, move toward it, pause between targets.
-- **Panicking**: Move away from `_threatPosition` at `PanicSpeed`.
-- **Contagion**: Nearby panicking same-species can spread panic; nearby calm same-species can shorten panic.
-- **Cohesion**: In FULL LOD, apply social vector toward center of same-species in `CohesionRadius`.
+## PlantStateData
 
-## ForagerAnimal States
+| Field | Type | Description |
+|-------|------|-------------|
+| Position | Vector3 | World position |
+| CellX, CellZ | int | Grid cell |
+| Health | int | Current health |
+| IsConsumed | bool | Health <= 0 |
+| SpeciesId | int | For variety |
 
-```mermaid
-stateDiagram-v2
-    [*] --> Wandering
-    Wandering --> Eating: Plant in range
-    Eating --> Wandering: Plant consumed/invalid
-    Wandering --> Panicking: Hunter in range
-    Eating --> Panicking: Hunter in range
-    Panicking --> Wandering: HunterSafeDistance or panic expires
-```
+## PlantNode
 
-### Forager-Specific Behaviors
+Thin Godot wrapper for promoted plants:
 
-- **Eating**: Stay still, call `plant.consume()` each `EatingDuration` seconds.
-- **Hunter flee**: Detect hunters via `get_hunters_in_radius()`, panic until `HunterSafeDistance` or hunter gone.
-- **Plant detection**: `get_plants_in_radius()` for non-consumed plants.
+- **ApplyState(worldPosition, isConsumed)**: Set position; show/hide or swap mesh by consumed state.
 
-## HunterAnimal States
-
-```mermaid
-stateDiagram-v2
-    [*] --> Wandering
-    Wandering --> Stalking: Prey in DetectionRange
-    Stalking --> Chasing: Prey panics OR within ChaseTriggerRange
-    Stalking --> Wandering: Prey lost
-    Chasing --> Killing: Within KillRange
-    Chasing --> Wandering: Prey lost
-    Killing --> Wandering: Deal KillDamage to prey
-```
-
-### Hunter-Specific Behaviors
-
-- **Stalking**: Move toward prey at `StalkSpeed` (with cohesion in FULL).
-- **Chasing**: Move toward prey at `ChaseSpeed` when prey panics or is within `ChaseTriggerRange`.
-- **Killing**: Stop, call `prey.take_damage(KillDamage)` (typically 999).
-- **Prey selection**: `get_animals_in_radius()` excluding hunters.
-
-## SimulationManager Integration
-
-Animals query SimulationManager for spatial data:
+## State Flow
 
 ```mermaid
 sequenceDiagram
-    participant A as Animal
-    participant S as SimulationManager
-    
-    A->>S: get_lod_tier(pos)
-    S-->>A: FULL | MEDIUM | FAR
-    
-    A->>S: get_same_species_in_radius(pos, radius, species, self)
-    S-->>A: Array of same-species nodes
-    
-    A->>S: get_hunters_in_radius(pos, radius)  [Forager only]
-    S-->>A: Array of hunter nodes
-    
-    A->>S: get_plants_in_radius(pos, radius)   [Forager only]
-    S-->>A: Array of plant nodes
-    
-    A->>S: get_animals_in_radius(pos, radius, self)  [Hunter only]
-    S-->>A: Array of animal nodes (prey)
+    participant CP as CellProcessor
+    participant Grid as SimulationGrid
+    participant Bridge as SimSyncBridge
+    participant Node as AnimalNode
+
+    CP->>Grid: AnimalLogic updates Velocity
+    CP->>Grid: Position += Velocity * delta
+    Bridge->>Bridge: Promote if in LOD_A
+    Bridge->>Node: ApplyState(pos, vel, speciesId)
 ```
-
-## Groups
-
-| Group | Used By |
-|-------|---------|
-| `animals` | All animals (base, forager, hunter) |
-| `foragers` | ForagerAnimal |
-| `hunters` | HunterAnimal |
-| `simulation_manager` | SimulationManager (for lookup) |
-| `player` | Player (for threat/raycast) |
-| `plants` | Plant nodes |
-
-## Signals
-
-- **AnimalDefeated**: Emitted when `Health <= 0` after `TakeDamage`. Used for future XP/loot.
 
 ## Scene Structure
 
-Each animal scene has:
+- **animal_base.tscn**: Node3D root, MeshInstance3D child
+- **plant_base.tscn**: Node3D root, StaticBody3D, mesh
 
-- `CharacterBody3D` root (C# script)
-- `Model` child (MeshInstance3D or packed scene) — PS1 effect applied in `_Ready` if `UsePs1Effect`
-- Debug `Label3D` and `MeshInstance3D` added at runtime (SimulationManager debug mode)
+Scripts: `AnimalNode.cs`, `PlantNode.cs`.

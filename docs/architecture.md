@@ -1,153 +1,130 @@
 # Architecture Overview
 
-This document describes the high-level architecture of BiologyGame, including the scene hierarchy, data flow, and cross-language integration.
+High-level architecture of BiologyGame: scene hierarchy, data flow, and simulation structure.
 
 ## Scene Hierarchy
 
 ```mermaid
-graph TB
-    Main[Main Node]
-    Main --> GameViewport[GameViewport SubViewport]
-    Main --> PosterizeLayer[PosterizeLayer CanvasLayer]
-    Main --> GameUI[GameUI]
-    
-    GameViewport --> WorldEnv[WorldEnvironment]
-    GameViewport --> DirLight[DirectionalLight3D]
-    GameViewport --> World[World Node3D]
-    GameViewport --> Player[Player CharacterBody3D]
-    GameViewport --> DayNight[DayNightWeatherManager]
-    
-    World --> TranqDarts[TranqDarts]
-    World --> TestTerrain[TestTerrain HeightmapTerrain]
-    World --> Animals[Animals Node3D]
-    World --> Plants[Plants Node3D]
-    World --> SimMgr[SimulationManager]
-    World --> FarBridge[FarSimBridge]
-    World --> WorldPopulator[WorldPopulator]
-    
-    TestTerrain --> Props[Props trees, rocks]
-    
-    style Main fill:#e1f5ff
-    style GameViewport fill:#fff4e1
-    style World fill:#e8f5e9
+flowchart TB
+    Main[Main Node3D]
+
+    Main --> WorldEnv[WorldEnvironment]
+    Main --> WorldTerrain[WorldTerrain]
+    Main --> Animals[Animals]
+    Main --> Plants[Plants]
+    Main --> FPSPlayer[FPSPlayer]
+    Main --> SimBridge[SimSyncBridge]
+    Main --> DebugOverlay[DebugOverlay]
+    Main --> DirLight[DirectionalLight3D]
 ```
 
-## System Architecture Diagram
+**Key relationships:** SimSyncBridge promotes entities to Animals/Plants, reads player position from FPSPlayer, and samples terrain from WorldTerrain.
 
-```mermaid
-flowchart LR
-    subgraph MainThread[Main Thread]
-        Main[Main.gd]
-        SimMgr[SimulationManager]
-        FarBridge[FarSimBridge]
-        Player[Player]
-        Animals[Animals in Scene]
-    end
-    
-    subgraph WorkerThread[Worker Thread]
-        FarSim[FarAnimalSim]
-    end
-    
-    Main --> SimMgr
-    Main --> FarBridge
-    SimMgr --> Animals
-    FarBridge <--> FarSim
-    FarBridge --> Animals
-```
-
-## Data Flow Overview
+## Data Flow
 
 ```mermaid
 flowchart TD
-    Input[Player Input]
-    Input --> Main
-    Main --> GameViewport
-    GameViewport --> Player
-    GameViewport --> World
-    
-    Player --> Shoot[Shoot Raycast]
-    Shoot --> Hit[Hit Animal/Terrain]
-    Hit --> TakeDamage[take_damage]
-    Hit --> TranqDart[Tranq Dart Visual]
-    
-    World --> SimMgr
-    SimMgr --> LOD[LOD Tier per Animal]
-    LOD --> Full[FULL AI]
-    LOD --> Medium[MEDIUM AI]
-    LOD --> Far[FAR Tick or Demote]
-    
-    Far --> FarBridge
-    FarBridge --> Demote[Demote to FarAnimalSim]
-    FarBridge --> Promote[Promote back to Scene]
-    Demote --> FarSim
-    FarSim --> Promote
+    subgraph Init[Initialization]
+        Populate[WorldPopulator.Populate]
+        Grid[SimulationGrid.SetData]
+        Rebuild[SimulationGrid.Rebuild]
+    end
+
+    subgraph PerFrame[Per Physics Frame]
+        PlayerPos[Player Position]
+        PlayerPos --> CellProc[CellProcessor.Tick]
+        CellProc --> AnimalLogic[AnimalLogic.UpdateStateFar]
+        CellProc --> PlantLogic[PlantLogic.Tick]
+        CellProc --> Transfers[ProcessTransfers]
+        CellProc --> Promote[Promote tier-0 to nodes]
+        CellProc --> Sync[Sync AnimalNode/PlantNode]
+    end
+
+    Populate --> Grid
+    Grid --> Rebuild
+    Rebuild --> CellProc
 ```
 
-## Cross-Language Integration
-
-BiologyGame uses **GDScript** for game logic, world setup, and simulation orchestration, and **C#** for animal AI and high-performance FAR simulation.
+## Simulation Architecture
 
 ```mermaid
-sequenceDiagram
-    participant SimMgr as SimulationManager (GDScript)
-    participant Animal as AnimalBase (C#)
-    participant Bridge as FarSimBridge (C#)
-    participant FarSim as FarAnimalSim (C#)
-    
-    SimMgr->>Animal: get_lod_tier(pos)
-    SimMgr->>Animal: should_ai_tick_this_frame(lod, id)
-    Animal->>SimMgr: Call("get_same_species_in_radius", pos, radius, species)
-    Animal->>SimMgr: Call("get_hunters_in_radius", ...)
-    Animal->>SimMgr: Call("get_plants_in_radius", ...)
-    
-    Bridge->>Animal: ExportStateData()
-    Bridge->>FarSim: Demote(state)
-    FarSim-->>Bridge: TryGetPromote()
-    Bridge->>Animal: ApplyStateData(state)
+flowchart TB
+    subgraph CSharp[Pure C# Simulation]
+        SimGrid[SimulationGrid]
+        CellProc[CellProcessor]
+        AnimalLogic[AnimalLogic]
+        PlantLogic[PlantLogic]
+        SimGrid --> CellProc
+        CellProc --> AnimalLogic
+        CellProc --> PlantLogic
+    end
+
+    subgraph Bridge[SimSyncBridge Main Thread]
+        HeightSampler[HeightmapSampler]
+        Promote[Promote/Demote]
+        Sync[Sync Nodes]
+    end
+
+    subgraph Godot[Godot Scene]
+        AnimalNodes[AnimalNode instances]
+        PlantNodes[PlantNode instances]
+    end
+
+    CellProc --> Promote
+    Promote --> AnimalNodes
+    Promote --> PlantNodes
+    Sync --> AnimalNodes
+    Sync --> PlantNodes
+    HeightSampler --> Promote
 ```
 
-### Key Integration Points
+## LOD Promotion Flow
 
-| From | To | Mechanism |
-|------|-----|-----------|
-| C# Animal | SimulationManager | `GetTree().GetFirstNodeInGroup("simulation_manager")` + `Call("method_name", ...)` |
-| FarSimBridge | Terrain | `_terrainNode.Call("get_height_at", x, z)` via HeightmapSampler (main thread only) |
-| FarSimBridge | Animals | `scene.Instantiate()`, `AddChild()`, `ApplyStateData()` |
-| AnimalLogic | AnimalBase | Shared `AnimalStateData` struct, no Godot APIs |
+```mermaid
+stateDiagram-v2
+    [*] --> InGrid: Spawn
+    InGrid --> HasNode: Distance <= LOD_A
+    HasNode --> InGrid: Distance > LOD_A + Hysteresis
+    HasNode --> Sync: Every frame
 
-## Process Order
-
-SimulationManager and FarSimBridge use `set_process_priority()` to control execution order:
-
-| Priority | Component | Purpose |
-|----------|-----------|---------|
-| -100 | SimulationManager | Runs first: rebuilds grid, processes FAR animals in scene |
-| -50 | FarSimBridge | Runs after: demotes/promotes animals to/from async sim |
-| 0 (default) | Animals | Full/Medium LOD `_physics_process` |
+    note right of HasNode: AnimalNode/PlantNode in scene
+    note right of InGrid: State in SimulationGrid arrays only
+```
 
 ## File Layout
 
 ```
 src/
-├── main.tscn, project.godot
+├── main.tscn
+├── project.godot
 ├── scripts/
-│   ├── game/           # main.gd, simulation_manager.gd, day_night_weather_manager.gd
-│   ├── player/         # player.gd
-│   ├── animals/        # species_constants.gd
-│   ├── plants/         # plant.gd
-│   ├── world/          # world_populator.gd, heightmap_terrain.gd
-│   ├── props/          # ps1_material_builder.gd, random_tree.gd, random_rock.gd
-│   ├── weapons/        # tranq_dart.gd
-│   └── csharp/         # Animals/*.cs, Simulation/*.cs
+│   ├── game/           # world_constants.gd
+│   ├── player/         # fps_controller.gd
+│   ├── world/          # terrain_bootstrap.gd
+│   ├── ui/             # debug_overlay.gd, debug_overlay_draw.gd
+│   └── csharp/
+│       ├── Simulation/ # SimSyncBridge, SimulationGrid, CellProcessor,
+│       │               # AnimalLogic, PlantLogic, WorldPopulator,
+│       │               # SimConfig, AnimalStateData, PlantStateData,
+│       │               # AnimalSpeciesConfig, HeightmapSampler
+│       ├── Animals/    # AnimalNode.cs
+│       └── Plants/     # PlantNode.cs
 ├── scenes/
-│   ├── world/          # world.tscn, test_terrain.tscn
-│   ├── player/         # player.tscn
-│   ├── animals/        # animal_base.tscn, forager_animal.tscn, hunter_animal.tscn
-│   ├── plants/         # plant.tscn
-│   ├── props/          # random_tree.tscn, random_rock.tscn
-│   └── weapons/        # tranq_dart.tscn
-├── shaders/            # ps1_style.gdshader, posterize.gdshader, terrain_heightmap.gdshader
-├── materials/          # terrain, ps1 ground
-├── environments/       # ps1_environment.tres
-└── ui/                 # game_ui.tscn, crosshair, health bar
+│   ├── world/          # world_terrain.tscn
+│   ├── player/         # fps_player.tscn
+│   ├── animals/        # animal_base.tscn
+│   ├── plants/         # plant_base.tscn
+│   └── ui/             # debug_overlay.tscn
+├── terrain_data/       # Yellowstone heightmap
+└── addons/terrain_3d/
 ```
+
+## Key Integration Points
+
+| Component | Role |
+|-----------|------|
+| **SimSyncBridge** | Main-thread bridge; owns SimulationGrid, CellProcessor; promotes/demotes entities; syncs AnimalNode/PlantNode; exposes GetSnapshotArray for debug overlay |
+| **SimulationGrid** | N×N spatial grid; cell assignment; neighbor queries; GetSnapshot for overlay |
+| **CellProcessor** | Drives sim per cell; calls AnimalLogic/PlantLogic; ProcessTransfers at interval |
+| **AnimalNode / PlantNode** | Thin Godot wrappers; ApplyState from bridge; no simulation logic |
+| **DebugOverlay** | Fetches snapshot from SimSyncBridge; draws LOD grid, dots, player |

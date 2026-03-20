@@ -1,16 +1,16 @@
 # BiologyGame
 
-An FPS with RPG elements set in an open world where the player hunts animals. Built with **Godot Engine 4.6+** using C# and GDScript. Features PS1-style graphics, a full LOD simulation system, and diverse animal AI (foragers and hunters).
+An FPS prototype set in an open world with a large-scale animal and plant simulation. Built with **Godot Engine 4.6+** using C# and GDScript. Features Terrain3D heightmap terrain, a grid-based LOD simulation system, and herbivore/predator AI.
 
 ## Features
 
-- **PS1-style graphics**: Vertex jitter shader, posterize color filter, heavy fog, low-poly aesthetic
-- **FPS controls**: WASD movement, mouse look, jump
-- **Open world**: Heightmap terrain (1000 m), props (trees, rocks), and populated wildlife
-- **Animal hunting**: Tranquilizer darts to capture animals; foragers (Deer, Rabbit, Bison) and hunters (Wolf, Bear) with distinct AI behaviors
-- **LOD simulation**: Spatial grid, three LOD tiers (FULL / MEDIUM / FAR), and async FarAnimalSim for distant animals
-- **Day/night & weather**: Cyclical day phases, dynamic sun/sky, snow, wind, and fog
-- **Plants**: Consumable plants for foragers to eat
+- **FPS controls**: WASD movement, mouse look, jump, sprint (Shift)
+- **Open world**: 8192×8192 m Terrain3D terrain (Yellowstone heightmap), props
+- **Large-scale simulation**: Millions of animals and plants via C# simulation
+- **LOD system**: 4-tier spatial grid; tier 0 entities get Godot nodes; distant entities simulated in arrays only
+- **Animal AI**: Herbivores and predators with wander, panic, contagion, and cohesion behaviors
+- **Plants**: Consumable plants for herbivores; regrowth and respawn
+- **Debug overlay**: Minimap with LOD grid, entity dots, player position (F1 or `)
 
 ## Requirements
 
@@ -20,7 +20,7 @@ An FPS with RPG elements set in an open world where the player hunts animals. Bu
 
 ## Running the Game
 
-1. Open the project in Godot (use `src/` as the project root, or open the folder containing `project.godot`).
+1. Open the project in Godot (use `src/` as the project root).
 2. Press F5 or click **Project > Run** to play.
 
 ## Controls
@@ -28,12 +28,10 @@ An FPS with RPG elements set in an open world where the player hunts animals. Bu
 | Action | Input |
 |--------|-------|
 | Move | W A S D |
+| Sprint | Shift |
 | Jump | Space |
-| Shoot (tranq dart) | Left mouse button |
 | Toggle mouse capture | Escape |
-| Toggle debug overlay | Backtick (`) |
-
-Arrow keys step time and adjust wind/snowfall when debugging (see [World & Environment](docs/world-and-environment.md)).
+| Toggle debug overlay | F1 or Backtick (`) |
 
 ## Project Structure
 
@@ -41,25 +39,19 @@ Arrow keys step time and adjust wind/snowfall when debugging (see [World & Envir
 src/
 ├── main.tscn              # Entry scene
 ├── scripts/
-│   ├── game/              # main.gd, simulation_manager.gd, day_night_weather_manager.gd
-│   ├── player/            # FPS controller
-│   ├── animals/           # species_constants.gd
-│   ├── plants/            # plant.gd
-│   ├── world/             # heightmap_terrain.gd, world_populator.gd
-│   ├── props/             # random_tree.gd, random_rock.gd, ps1_material_builder.gd
-│   ├── weapons/           # tranq_dart.gd
-│   └── csharp/            # AnimalBase, ForagerAnimal, HunterAnimal, FarSimBridge, etc.
+│   ├── game/              # world_constants.gd
+│   ├── player/            # fps_controller.gd
+│   ├── world/             # terrain_bootstrap.gd
+│   ├── ui/                # debug_overlay.gd, debug_overlay_draw.gd
+│   └── csharp/            # Simulation/, Animals/, Plants/
 ├── scenes/
-│   ├── player/            # FPS controller
-│   ├── world/             # Terrain, TestTerrain
-│   ├── animals/           # animal_base, forager_animal, hunter_animal
-│   ├── plants/            # plant
-│   ├── props/             # random_tree, random_rock
-│   └── weapons/           # tranq_dart
-├── shaders/               # ps1_style.gdshader, posterize.gdshader, terrain_heightmap.gdshader
-├── materials/             # Terrain, PS1 ground
-├── environments/          # Fog, sky, lighting
-└── ui/                    # Crosshair, health bar
+│   ├── world/             # world_terrain.tscn
+│   ├── player/            # fps_player.tscn
+│   ├── animals/           # animal_base.tscn
+│   ├── plants/            # plant_base.tscn
+│   └── ui/                # debug_overlay.tscn
+├── terrain_data/          # Yellowstone heightmap
+└── addons/terrain_3d/     # Terrain3D addon
 ```
 
 ## Documentation
@@ -68,30 +60,12 @@ Technical docs are in [`docs/`](docs/):
 
 | Document | Description |
 |----------|-------------|
-| [Architecture](docs/architecture.md) | Scene hierarchy, data flow, GDScript/C# integration |
-| [Simulation](docs/simulation.md) | LOD tiers, spatial grid, FarSimBridge, AnimalLogic |
-| [Animals](docs/animals.md) | Species, ForagerAnimal/HunterAnimal AI, states |
-| [World & Environment](docs/world-and-environment.md) | Terrain, WorldPopulator, day/night, weather, plants |
-| [Player & Combat](docs/player-and-combat.md) | FPS controls, raycast shooting, tranq darts |
-| [Visual Style](docs/visual-style.md) | PS1 shaders, posterize, environment |
-
-## Extending the Prototype
-
-### Adding Animals
-
-- Use `ForagerAnimal` for plant-eating, hunter-fleeing species; use `HunterAnimal` for predators.
-- Instance `scenes/animals/forager_animal.tscn` or `hunter_animal.tscn` in the world.
-- Configure species in `species_constants.gd` and `AnimalBase.Species` (C#).
-- Connect to `animal_defeated` for XP/loot logic.
-
-### Adjusting PS1 Aesthetic
-
-- **Shader** (`shaders/ps1_style.gdshader`): Tweak `jitter`, `resolution`, `affine_mapping`.
-- **Posterize** (`shaders/posterize.gdshader`): Color levels and film grain.
-- **Environment** (`environments/ps1_environment.tres`): Fog density and draw distance.
-- **Materials**: Override `albedo_color` for surface colors.
-
-See [Visual Style](docs/visual-style.md) for details.
+| [Architecture](docs/architecture.md) | Scene hierarchy, data flow, SimSyncBridge |
+| [Simulation](docs/simulation.md) | SimulationGrid, CellProcessor, LOD tiers, AnimalLogic |
+| [Animals](docs/animals.md) | Species config, AnimalNode, PlantNode |
+| [World & Environment](docs/world-and-environment.md) | Terrain, WorldPopulator, world bounds |
+| [Player](docs/player-and-combat.md) | FPS controller |
+| [Visual Style](docs/visual-style.md) | Environment, materials |
 
 ## Input Mapping
 
@@ -102,7 +76,13 @@ If inputs do not work, add them in **Project > Project Settings > Input Map**:
 - `move_left` → A
 - `move_right` → D
 - `jump` → Space
-- `shoot` → Left mouse button
+- `debug_overlay` → Backtick (`), F1
+
+## Configuration
+
+- **World size**: `world_constants.gd` (WORLD_SIZE_XZ_METERS) and `SimConfig.cs` (WorldSizeXZ)
+- **Animal/plant counts**: `SimSyncBridge` exports (AnimalCount, PlantCount; default 2M / 4M)
+- **LOD thresholds**: `SimConfig.cs` (LOD_A_Cells through LOD_D_Cells)
 
 ## License
 

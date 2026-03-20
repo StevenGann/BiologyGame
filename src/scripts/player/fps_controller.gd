@@ -1,12 +1,14 @@
 extends CharacterBody3D
-## Basic first-person controller: WASD, mouse look, gravity, jump.
+## First-person controller: WASD movement, mouse look, gravity, jump, sprint.
+##
 ## Uses project input actions: move_forward, move_back, move_left, move_right, jump.
+## Must be in group "player" for SimSyncBridge and DebugOverlay to find it.
 
-@export var move_speed: float = 8.0
-@export var sprint_speed: float = 14.0
-@export var jump_velocity: float = 6.0
-@export var mouse_sensitivity: float = 0.002
-@export var pitch_limit: float = 89.0  ## degrees, clamp vertical look
+@export var move_speed: float = 8.0  ## Walk speed (m/s)
+@export var sprint_speed: float = 14.0  ## Sprint speed when Shift held
+@export var jump_velocity: float = 6.0  ## Initial upward velocity on jump
+@export var mouse_sensitivity: float = 0.002  ## Radians per pixel
+@export var pitch_limit: float = 89.0  ## Vertical look clamp (degrees)
 
 var _camera: Camera3D
 var _pitch: float = 0.0  ## radians

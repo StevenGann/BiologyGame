@@ -1,11 +1,14 @@
 extends Node3D
-## Ensures Terrain3D uses the game camera and logs diagnostic info when the scene loads.
-## Attach to the parent of the Terrain3D node (e.g. WorldTerrain).
+## Bootstrap for Terrain3D: sets camera reference and logs region/data status.
+##
+## Attach to the parent of the Terrain3D node (e.g. WorldTerrain). Recursively
+## finds Terrain3D, calls set_camera(get_viewport().get_camera_3d()), and logs
+## data_directory and region file count. Enable enable_debug_logs for verbose output.
 
-@export var enable_debug_logs: bool = false
+@export var enable_debug_logs: bool = false  ## If true, sets Terrain3D debug_level to 2
 
-var _terrain: Node
-var _camera_set: bool = false
+var _terrain: Node  ## Cached Terrain3D reference
+var _camera_set: bool = false  ## Avoid repeated set_camera calls
 
 
 func _ready() -> void:

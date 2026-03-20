@@ -1,18 +1,23 @@
 extends Control
 ## Debug minimap overlay. Toggle with F1 or ` (backtick/~).
-## Shows NxN grid by LOD tier, animal/plant dots, player position.
-## Optimized: SubViewport at lower resolution, throttled redraws, capped dots, 1px rects.
+##
+## Shows 32×32 sim grid by LOD tier (green/yellow/orange/red), animal/plant dots,
+## and player position. Data from SimSyncBridge.GetSnapshotArray().
+##
+## Optimizations: SubViewport at internal_resolution, throttled redraws,
+## capped dots with uniform sampling, 1px rects for speed.
+## SimSyncBridge reuses snapshot buffer to avoid GC pressure.
 
-@export var redraw_interval_frames: int = 48
-@export var max_dots_to_draw: int = 1500
-@export var internal_resolution: int = 256
+@export var redraw_interval_frames: int = 48  ## Frames between redraws (default ~0.8s at 60 FPS)
+@export var max_dots_to_draw: int = 1500  ## Cap on entity dots; excess is uniformly sampled
+@export var internal_resolution: int = 256  ## Draw resolution; viewport stretches to fill Minimap
 
 var _overlay_visible: bool = false
 var _frame_counter: int = 0
-var _bridge: Node
-var _player: Node3D
-var _snapshot: Array = []
-var _draw_control: Control
+var _bridge: Node  ## SimSyncBridge (group "sim_bridge")
+var _player: Node3D  ## FPSPlayer (group "player")
+var _snapshot: Array = []  ## Packed [x, z, isAnimal, speciesId, ...] from C#
+var _draw_control: Control  ## Inner Control in SubViewport that performs _draw
 
 
 func _ready() -> void:

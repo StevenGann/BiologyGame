@@ -7,9 +7,12 @@ using BiologyGame.Plants;
 namespace BiologyGame.Simulation;
 
 /// <summary>
-/// Bridges simulation (C# arrays) and Godot scene tree. Runs on main thread in _PhysicsProcess.
-/// Promote: tier 0 entities get Godot nodes. Demote: entities leaving tier 0 lose nodes.
-/// Hysteresis avoids thrashing at boundaries.
+/// Main-thread bridge between C# simulation and Godot scene tree.
+///
+/// Flow: WorldPopulator fills arrays → SimulationGrid.Rebuild → CellProcessor.Tick each frame.
+/// Entities within LOD_A cells of player get AnimalNode/PlantNode (promote); beyond
+/// LOD_A + Hysteresis lose nodes (demote). HeightmapSampler provides Y for placement.
+/// Exposes GetSnapshotArray for debug overlay (group "sim_bridge").
 /// </summary>
 public partial class SimSyncBridge : Node
 {

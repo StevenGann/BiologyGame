@@ -1,6 +1,9 @@
 extends Control
 ## Inner draw surface for debug overlay. Receives snapshot and player position via meta from parent.
-## Draws at fixed internal_resolution (e.g. 128×128) for smaller dots and less draw work.
+##
+## Snapshot format: [x, z, isAnimal(0/1), speciesId, ...] per entity (4 floats each).
+## Draws LOD grid (tier 0 green, 1 yellow, 2 orange, 3 red), entity dots (1px rects),
+## and player dot (cyan). Uses world bounds 0..8192 on X and Z.
 
 func _draw() -> void:
 	var snapshot: Array = get_meta("snapshot", [])
