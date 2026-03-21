@@ -27,14 +27,14 @@ public static class SimConfig
     /// <summary>Lateral world size in meters (X and Z). From WorldConstants.</summary>
     public const float WorldSizeXZ = 8192.0f;
 
-    /// <summary>Half-extent from world origin. For centered terrain: WorldSizeXZ * 0.5.</summary>
+    /// <summary>Half-extent from world origin (Terrain3D / gameplay use centered world around 0,0).</summary>
     public const float HalfExtentXZ = WorldSizeXZ * 0.5f;
 
-    /// <summary>World X of min corner (e.g. 0 for 0..N, or -HalfExtentXZ for centered).</summary>
-    public const float WorldOriginX = 0f;
+    /// <summary>World X of southwest/min corner. Matches Terrain3D centered regions: [-HalfExtent, +HalfExtent).</summary>
+    public const float WorldOriginX = -HalfExtentXZ;
 
-    /// <summary>World Z of min corner.</summary>
-    public const float WorldOriginZ = 0f;
+    /// <summary>World Z of southwest/min corner.</summary>
+    public const float WorldOriginZ = -HalfExtentXZ;
 
     /// <summary>Cell size in world units. WorldSizeXZ / GridN.</summary>
     public static readonly float CellSizeMeters = WorldSizeXZ / GridN;

@@ -5,7 +5,7 @@ namespace BiologyGame.Plants;
 
 /// <summary>
 /// Thin Godot wrapper for promoted plants. Applies state from SimSyncBridge.
-/// No simulation logic; presentation only. Uses StaticBody3D for future collisions.
+/// No simulation logic; presentation only (no physics body — keeps Jolt body budget for animals).
 /// </summary>
 public partial class PlantNode : Node3D
 {

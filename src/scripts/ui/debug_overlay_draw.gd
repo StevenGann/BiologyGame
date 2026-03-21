@@ -3,7 +3,7 @@ extends Control
 ##
 ## Snapshot format: [x, z, isAnimal(0/1), speciesId, ...] per entity (4 floats each).
 ## Draws LOD grid (tier 0 green, 1 yellow, 2 orange, 3 red), entity dots (1px rects),
-## and player dot (cyan). Uses world bounds 0..8192 on X and Z.
+## and player dot (cyan). World bounds from SimConfig via overlay meta (centered on 0,0).
 
 func _draw() -> void:
 	var snapshot: Array = get_meta("snapshot", [])
@@ -17,9 +17,9 @@ func _draw() -> void:
 	var max_dots: int = get_meta("max_dots_to_draw", 1500)
 
 	var cell_w: float = float(map_size) / grid_n
-	var world_size: float = 8192.0
-	var world_origin_x: float = 0.0
-	var world_origin_z: float = 0.0
+	var world_size: float = float(get_meta("world_size_xz", 8192.0))
+	var world_origin_x: float = float(get_meta("world_origin_x", -4096.0))
+	var world_origin_z: float = float(get_meta("world_origin_z", -4096.0))
 
 	# Background
 	draw_rect(Rect2(0, 0, map_size, map_size), Color(0.1, 0.1, 0.15, 0.9))

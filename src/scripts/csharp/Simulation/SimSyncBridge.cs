@@ -9,7 +9,8 @@ namespace BiologyGame.Simulation;
 /// <summary>
 /// Main-thread bridge between C# simulation and Godot scene tree.
 ///
-/// Flow: WorldPopulator fills arrays → SimulationGrid.Rebuild → CellProcessor.Tick each frame.
+/// Flow: WorldPopulator fills active slice of arrays → SimulationGrid.Rebuild → CellProcessor.Tick each frame.
+/// Optional population ramp grows active counts toward AnimalCount/PlantCount over time.
 /// Entities within LOD_A cells of player get AnimalNode/PlantNode (promote); beyond
 /// LOD_A + Hysteresis lose nodes (demote). HeightmapSampler provides Y for placement.
 /// Exposes GetSnapshotArray for debug overlay (group "sim_bridge").
@@ -29,10 +30,25 @@ public partial class SimSyncBridge : Node
     [Export] public int PlantCount { get; set; } = 4000000;
     [Export] public bool SpawnWholeMap { get; set; } = true;
     [Export] public float SpawnRadius { get; set; } = 600f;
-    [Export] public float SpawnCenterX { get; set; } = 400f;
-    [Export] public float SpawnCenterZ { get; set; } = 400f;
+    /// <summary>Added to <see cref="SimConfig.WorldOriginX"/> for spawn circle center (default ≈ world origin 0).</summary>
+    [Export] public float SpawnCenterX { get; set; } = 4096f;
+    [Export] public float SpawnCenterZ { get; set; } = 4096f;
     [Export] public float HerbivoreRatio { get; set; } = 0.7f;
     [Export] public int RandomSeed { get; set; } = -1;
+
+    [ExportGroup("Population ramp")]
+    /// <summary>When true, only <see cref="RampInitialAnimals"/> / <see cref="RampInitialPlants"/> exist at startup; the rest spawn over time up to AnimalCount / PlantCount.</summary>
+    [Export] public bool RampPopulation { get; set; }
+    [Export] public int RampInitialAnimals { get; set; } = 4096;
+    [Export] public int RampInitialPlants { get; set; } = 16384;
+    [Export] public float RampAnimalsPerSecond { get; set; } = 100_000f;
+    [Export] public float RampPlantsPerSecond { get; set; } = 200_000f;
+    /// <summary>Caps how many entities are spawned per frame per type to avoid long stalls.</summary>
+    [Export] public int RampMaxSpawnPerFrame { get; set; } = 25_000;
+
+    [ExportGroup("Debug")]
+    /// <summary>Max entities packed into the minimap snapshot (each uses 4 floats). Keeps GDScript marshalling fast when sim counts are huge.</summary>
+    [Export] public int DebugSnapshotMaxEntities { get; set; } = 16_384;
 
     private SimulationGrid _grid;
     private CellProcessor _processor;
@@ -55,6 +71,12 @@ public partial class SimSyncBridge : Node
 
     private PackedScene _animalScene;
     private PackedScene _plantScene;
+
+    private int _activeAnimalCount;
+    private int _activePlantCount;
+    private Random _populationRng;
+    private float _animalRampCarry;
+    private float _plantRampCarry;
 
     private const int HeightmapResolution = 256;
 
@@ -90,30 +112,34 @@ public partial class SimSyncBridge : Node
             AnimalSpeciesConfig.CreatePredator(1, AnimalScenePath),
         };
 
-        _animals = new AnimalStateData[AnimalCount];
-        _plants = new PlantStateData[PlantCount];
+        _populationRng = RandomSeed >= 0 ? new Random(RandomSeed) : new Random();
 
-        var config = new WorldPopulatorConfig
+        _animals = new AnimalStateData[Math.Max(0, AnimalCount)];
+        _plants = new PlantStateData[Math.Max(0, PlantCount)];
+
+        if (RampPopulation)
         {
-            AnimalCount = AnimalCount,
-            HerbivoreRatio = HerbivoreRatio,
-            PlantCount = PlantCount,
-            SpawnWholeMap = SpawnWholeMap,
-            SpawnCenterX = SimConfig.WorldOriginX + SpawnCenterX,
-            SpawnCenterZ = SimConfig.WorldOriginZ + SpawnCenterZ,
-            SpawnRadius = SpawnRadius,
-            Seed = RandomSeed >= 0 ? RandomSeed : null,
-            PlantMaxHealth = 3,
-        };
+            var initA = RampInitialAnimals > 0 ? RampInitialAnimals : Mathf.Min(4096, _animals.Length);
+            var initP = RampInitialPlants > 0 ? RampInitialPlants : Mathf.Min(16384, _plants.Length);
+            _activeAnimalCount = Mathf.Clamp(initA, 0, _animals.Length);
+            _activePlantCount = Mathf.Clamp(initP, 0, _plants.Length);
+        }
+        else
+        {
+            _activeAnimalCount = _animals.Length;
+            _activePlantCount = _plants.Length;
+        }
+
+        var config = BuildPopulatorConfig();
         WorldPopulator.Populate(
-            _animals, AnimalCount, _plants, PlantCount,
-            config, _speciesConfigs[0], _speciesConfigs[1]);
+            _animals, _activeAnimalCount, _plants, _activePlantCount,
+            config, _speciesConfigs[0], _speciesConfigs[1], ref _populationRng);
 
         _grid = new SimulationGrid();
-        _grid.SetData(_animals, AnimalCount, _plants, PlantCount);
+        _grid.SetData(_animals, _activeAnimalCount, _plants, _activePlantCount);
         _grid.Rebuild();
 
-        _processor = new CellProcessor(_grid, _animals, AnimalCount, _plants, PlantCount);
+        _processor = new CellProcessor(_grid, _animals, _activeAnimalCount, _plants, _activePlantCount);
 
         _animalScene = GD.Load<PackedScene>(AnimalScenePath);
         _plantScene = GD.Load<PackedScene>(PlantScenePath);
@@ -126,6 +152,9 @@ public partial class SimSyncBridge : Node
     {
         if (_processor == null || _player == null) return;
 
+        if (RampPopulation)
+            RampSpawnStep((float)delta);
+
         var playerPos = _player.GlobalPosition;
         _processor.SetPlayerPosition(playerPos.X, playerPos.Z);
         _processor.Tick((float)delta);
@@ -137,7 +166,7 @@ public partial class SimSyncBridge : Node
         foreach (var kv in _promotedAnimals)
         {
             var i = kv.Key;
-            if (i >= AnimalCount) continue;
+            if (i >= _activeAnimalCount) continue;
             var dist = SimulationGrid.ManhattanDistance(
                 _animals[i].CellX, _animals[i].CellZ,
                 playerCell.CellX, playerCell.CellZ);
@@ -158,7 +187,7 @@ public partial class SimSyncBridge : Node
         foreach (var kv in _promotedPlants)
         {
             var i = kv.Key;
-            if (i >= PlantCount) continue;
+            if (i >= _activePlantCount) continue;
             if (_plants[i].IsConsumed) { _toDemotePlants.Add(i); continue; }
             var dist = SimulationGrid.ManhattanDistance(
                 _plants[i].CellX, _plants[i].CellZ,
@@ -176,7 +205,7 @@ public partial class SimSyncBridge : Node
             }
         }
 
-        for (var i = 0; i < AnimalCount; i++)
+        for (var i = 0; i < _activeAnimalCount; i++)
         {
             var dist = SimulationGrid.ManhattanDistance(
                 _animals[i].CellX, _animals[i].CellZ,
@@ -190,7 +219,7 @@ public partial class SimSyncBridge : Node
             }
         }
 
-        for (var i = 0; i < PlantCount; i++)
+        for (var i = 0; i < _activePlantCount; i++)
         {
             if (_plants[i].IsConsumed) continue;
             var dist = SimulationGrid.ManhattanDistance(
@@ -264,22 +293,95 @@ public partial class SimSyncBridge : Node
             node.GlobalPosition = pos;
     }
 
+    /// <summary>Minimap / sim use same world frame as <see cref="SimConfig"/> (Terrain3D-centered).</summary>
+    public float GetDebugMapWorldOriginX() => SimConfig.WorldOriginX;
+
+    public float GetDebugMapWorldOriginZ() => SimConfig.WorldOriginZ;
+
+    public float GetDebugMapWorldSizeXZ() => SimConfig.WorldSizeXZ;
+
     /// <summary>Thread-safe snapshot for debug overlay. Packed as [x, z, isAnimal, speciesId, ...].</summary>
     public void GetSnapshot(List<float> outBuffer)
     {
-        _grid?.GetSnapshot(outBuffer);
+        var cap = DebugSnapshotMaxEntities > 0 ? DebugSnapshotMaxEntities : int.MaxValue;
+        _grid?.GetSnapshot(outBuffer, cap);
     }
 
     /// <summary>Returns snapshot as float[] for GDScript (e.g. debug overlay). Packed as [x, z, isAnimal, speciesId, ...]. Reuses internal buffer to avoid GC pressure.</summary>
     public float[] GetSnapshotArray()
     {
         _snapshotBuffer.Clear();
-        _grid?.GetSnapshot(_snapshotBuffer);
+        var cap = DebugSnapshotMaxEntities > 0 ? DebugSnapshotMaxEntities : int.MaxValue;
+        _grid?.GetSnapshot(_snapshotBuffer, cap);
         var count = _snapshotBuffer.Count;
         if (_snapshotArray.Length != count)
             _snapshotArray = new float[count];
         for (var i = 0; i < count; i++)
             _snapshotArray[i] = _snapshotBuffer[i];
         return _snapshotArray;
+    }
+
+    private WorldPopulatorConfig BuildPopulatorConfig()
+    {
+        return new WorldPopulatorConfig
+        {
+            AnimalCount = AnimalCount,
+            HerbivoreRatio = HerbivoreRatio,
+            PlantCount = PlantCount,
+            SpawnWholeMap = SpawnWholeMap,
+            SpawnCenterX = SimConfig.WorldOriginX + SpawnCenterX,
+            SpawnCenterZ = SimConfig.WorldOriginZ + SpawnCenterZ,
+            SpawnRadius = SpawnRadius,
+            Seed = RandomSeed >= 0 ? RandomSeed : null,
+            PlantMaxHealth = 3,
+        };
+    }
+
+    private void RampSpawnStep(float delta)
+    {
+        if (_grid == null || _processor == null) return;
+        if (_activeAnimalCount >= AnimalCount && _activePlantCount >= PlantCount) return;
+
+        var cfg = BuildPopulatorConfig();
+        var maxBatch = Math.Max(1, RampMaxSpawnPerFrame);
+        var changed = false;
+
+        _animalRampCarry += RampAnimalsPerSecond * delta;
+        if (_activeAnimalCount < AnimalCount && _animalRampCarry >= 1f)
+        {
+            var want = (int)_animalRampCarry;
+            var batch = Math.Min(Math.Min(want, maxBatch), AnimalCount - _activeAnimalCount);
+            _animalRampCarry -= batch;
+            for (var k = 0; k < batch; k++)
+            {
+                var i = _activeAnimalCount;
+                WorldPopulator.SpawnAnimalAt(i, _animals, ref _populationRng, cfg, _speciesConfigs[0], _speciesConfigs[1]);
+                _grid.RegisterAnimal(i);
+                _activeAnimalCount++;
+            }
+            changed = true;
+        }
+
+        _plantRampCarry += RampPlantsPerSecond * delta;
+        if (_activePlantCount < PlantCount && _plantRampCarry >= 1f)
+        {
+            var want = (int)_plantRampCarry;
+            var batch = Math.Min(Math.Min(want, maxBatch), PlantCount - _activePlantCount);
+            _plantRampCarry -= batch;
+            for (var k = 0; k < batch; k++)
+            {
+                var i = _activePlantCount;
+                WorldPopulator.SpawnPlantAt(i, _plants, ref _populationRng, cfg);
+                _grid.RegisterPlant(i);
+                _activePlantCount++;
+            }
+            changed = true;
+        }
+
+        if (changed)
+        {
+            _grid.SetData(_animals, _activeAnimalCount, _plants, _activePlantCount);
+            _processor.SetActiveEntityCounts(_activeAnimalCount, _activePlantCount);
+        }
     }
 }

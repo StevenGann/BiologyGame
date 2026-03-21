@@ -1,23 +1,20 @@
-[gd_scene load_steps=4 format=3 uid="uid://c4fpsplayer001"]
+[gd_scene format=3 uid="uid://si1x6boap42w"]
 
-[ext_resource type="Script" path="res://scripts/player/fps_controller.gd" id="1_script"]
+[ext_resource type="Script" uid="uid://d4ctx1735nr4r" path="res://scripts/player/fps_controller.gd" id="1_script"]
 
 [sub_resource type="CapsuleShape3D" id="CapsuleShape3D_player"]
 radius = 0.4
 height = 1.8
 
-[node name="FPSPlayer" type="CharacterBody3D" groups=["player"]]
-collision_layer = 1
-collision_mask = 1
+[node name="FPSPlayer" type="CharacterBody3D" unique_id=2115516843 groups=["player"]]
 script = ExtResource("1_script")
 
-[node name="CollisionShape3D" type="CollisionShape3D" parent="."]
+[node name="CollisionShape3D" type="CollisionShape3D" parent="." unique_id=1892187611]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.9, 0)
 shape = SubResource("CapsuleShape3D_player")
 
-[node name="Camera3D" type="Camera3D" parent="."]
+[node name="Camera3D" type="Camera3D" parent="." unique_id=30766508]
 transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 1.6, 0)
 current = true
 fov = 70.0
-near = 0.05
-far = 20000.0
+far = 50000.0

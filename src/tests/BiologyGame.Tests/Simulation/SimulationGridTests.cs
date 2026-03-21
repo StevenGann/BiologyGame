@@ -33,18 +33,20 @@ public class SimulationGridTests
     [Fact]
     public void Rebuild_AssignsAnimalsToCells()
     {
+        var ox = SimConfig.WorldOriginX;
+        var oz = SimConfig.WorldOriginZ;
         var animals = new AnimalStateData[3];
-        animals[0] = TestStateFactory.CreateDefault(position: new Vector3(0, 0, 0));
-        animals[1] = TestStateFactory.CreateDefault(position: new Vector3(SimConfig.CellSizeMeters * 2, 0, 0));
-        animals[2] = TestStateFactory.CreateDefault(position: new Vector3(0, 0, SimConfig.CellSizeMeters * 2));
+        animals[0] = TestStateFactory.CreateDefault(position: new Vector3(ox, 0, oz));
+        animals[1] = TestStateFactory.CreateDefault(position: new Vector3(ox + SimConfig.CellSizeMeters * 2, 0, oz));
+        animals[2] = TestStateFactory.CreateDefault(position: new Vector3(ox, 0, oz + SimConfig.CellSizeMeters * 2));
 
         var grid = new SimulationGrid();
         grid.SetData(animals, 3, System.Array.Empty<PlantStateData>(), 0);
         grid.Rebuild();
 
-        var (c0x, c0z) = SimulationGrid.CellFromWorld(0, 0);
-        var (c1x, c1z) = SimulationGrid.CellFromWorld(SimConfig.CellSizeMeters * 2, 0);
-        var (c2x, c2z) = SimulationGrid.CellFromWorld(0, SimConfig.CellSizeMeters * 2);
+        var (c0x, c0z) = SimulationGrid.CellFromWorld(ox, oz);
+        var (c1x, c1z) = SimulationGrid.CellFromWorld(ox + SimConfig.CellSizeMeters * 2, oz);
+        var (c2x, c2z) = SimulationGrid.CellFromWorld(ox, oz + SimConfig.CellSizeMeters * 2);
         Assert.Equal(c0x, animals[0].CellX);
         Assert.Equal(c0z, animals[0].CellZ);
         Assert.Equal(c1x, animals[1].CellX);
@@ -56,16 +58,18 @@ public class SimulationGridTests
     [Fact]
     public void GetSameSpeciesInRadius_ExcludesSelf()
     {
+        var ox = SimConfig.WorldOriginX;
+        var oz = SimConfig.WorldOriginZ;
         var animals = new AnimalStateData[2];
-        animals[0] = TestStateFactory.CreateDefault(position: new Vector3(0, 0, 0), speciesId: 0);
-        animals[1] = TestStateFactory.CreateDefault(position: new Vector3(5, 0, 0), speciesId: 0);
+        animals[0] = TestStateFactory.CreateDefault(position: new Vector3(ox, 0, oz), speciesId: 0);
+        animals[1] = TestStateFactory.CreateDefault(position: new Vector3(ox + 5f, 0, oz), speciesId: 0);
 
         var grid = new SimulationGrid();
         grid.SetData(animals, 2, System.Array.Empty<PlantStateData>(), 0);
         grid.Rebuild();
 
         var results = new List<int>();
-        grid.GetSameSpeciesInRadius(new Vector3(0, 0, 0), 20f, 0, 0, results);
+        grid.GetSameSpeciesInRadius(new Vector3(ox, 0, oz), 20f, 0, 0, results);
 
         Assert.Single(results);
         Assert.Equal(1, results[0]);

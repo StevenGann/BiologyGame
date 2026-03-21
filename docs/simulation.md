@@ -1,6 +1,6 @@
 # Simulation System
 
-The simulation manages spatial partitioning, LOD (Level of Detail), and efficient simulation of animals and plants across a 32×32 grid over an 8192×8192 m world.
+The simulation manages spatial partitioning, LOD (Level of Detail), and efficient simulation of animals and plants across a 32×32 grid. World XZ spans **8192 m** with origin at **−4096** (i.e. **−4096 … +4096**), matching Terrain3D’s centered layout so world **(0, 0)** is the map center.
 
 ## LOD Tiers
 
@@ -44,6 +44,14 @@ stateDiagram-v2
 
 Hysteresis prevents thrashing at the boundary.
 
+## Population ramp (stress testing)
+
+`SimSyncBridge` can grow the simulated population over time instead of filling all slots in one frame (which can crash or hang with very large `AnimalCount` / `PlantCount`).
+
+- **Ramp population** (`RampPopulation`): when enabled, only **Ramp initial animals** / **Ramp initial plants** are spawned at startup; the rest are added each physics frame up to the export caps.
+- Tune **Ramp animals per second**, **Ramp plants per second**, and **Ramp max spawn per frame** to control how fast load increases.
+- Arrays are still allocated to the full target counts on startup (memory use is unchanged); ramping only spreads **CPU work** of placement and grid registration.
+
 ## Spatial Grid
 
 ```mermaid
@@ -71,7 +79,7 @@ flowchart TB
 | `ProcessTransfers()` | Move entities that crossed cell boundaries |
 | `GetAnimalIndicesInCell(cx, cz)` | Animal indices in cell |
 | `GetPlantIndicesInCell(cx, cz)` | Plant indices in cell |
-| `GetSnapshot(outBuffer)` | Pack [x, z, isAnimal, speciesId, ...] for debug overlay |
+| `GetSnapshot(outBuffer)` | Pack [x, z, isAnimal, speciesId, ...] for debug overlay (capped by `DebugSnapshotMaxEntities` on `SimSyncBridge` so huge populations do not marshal multi‑million floats to GDScript) |
 
 ### Configuration (SimConfig)
 

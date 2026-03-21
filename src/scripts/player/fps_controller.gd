@@ -1,5 +1,6 @@
 extends CharacterBody3D
 ## First-person controller: WASD movement, mouse look, gravity, jump, sprint.
+## When debug overlay (F1) is visible: 10× sprint speed and fly mode for exploration.
 ##
 ## Uses project input actions: move_forward, move_back, move_left, move_right, jump.
 ## Must be in group "player" for SimSyncBridge and DebugOverlay to find it.
@@ -12,6 +13,7 @@ extends CharacterBody3D
 
 var _camera: Camera3D
 var _pitch: float = 0.0  ## radians
+var _debug_overlay: Control = null
 
 
 func _ready() -> void:
@@ -19,6 +21,7 @@ func _ready() -> void:
 	_camera = get_node_or_null("Camera3D")
 	if not _camera:
 		push_error("FPSController: Camera3D child not found")
+	_debug_overlay = get_tree().get_first_node_in_group("debug_overlay") as Control
 	Input.mouse_mode = Input.MOUSE_MODE_CAPTURED
 
 
@@ -38,6 +41,17 @@ func _input(event: InputEvent) -> void:
 
 
 func _physics_process(delta: float) -> void:
+	if _debug_overlay == null:
+		_debug_overlay = get_tree().get_first_node_in_group("debug_overlay") as Control
+	var debug_mode := _debug_overlay != null and _debug_overlay.visible
+
+	if debug_mode:
+		_physics_process_debug(delta)
+	else:
+		_physics_process_normal(delta)
+
+
+func _physics_process_normal(delta: float) -> void:
 	var gravity := float(ProjectSettings.get_setting("physics/3d/default_gravity"))
 	if not is_on_floor():
 		velocity.y -= gravity * delta
@@ -48,6 +62,28 @@ func _physics_process(delta: float) -> void:
 	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
 	var direction := (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
 	var speed := sprint_speed if Input.is_key_pressed(KEY_SHIFT) else move_speed
+
+	if direction:
+		velocity.x = direction.x * speed
+		velocity.z = direction.z * speed
+	else:
+		velocity.x = move_toward(velocity.x, 0, speed)
+		velocity.z = move_toward(velocity.z, 0, speed)
+
+	move_and_slide()
+
+
+func _physics_process_debug(_delta: float) -> void:
+	var input_dir := Input.get_vector("move_left", "move_right", "move_forward", "move_back")
+	var direction := (transform.basis * Vector3(input_dir.x, 0, input_dir.y)).normalized()
+	var speed := sprint_speed * 10.0
+
+	if Input.is_key_pressed(KEY_SPACE):
+		velocity.y = speed
+	elif Input.is_key_pressed(KEY_C):
+		velocity.y = -speed
+	else:
+		velocity.y = move_toward(velocity.y, 0, speed)
 
 	if direction:
 		velocity.x = direction.x * speed

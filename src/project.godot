@@ -32,7 +32,7 @@ project/assembly_name="BiologyGame"
 
 [editor_plugins]
 
-enabled=PackedStringArray("res://addons/terrain_3d/plugin.cfg")
+enabled=PackedStringArray("res://addons/godot_mcp/plugin.cfg", "res://addons/terrain_3d/plugin.cfg")
 
 [input]
 
@@ -75,8 +75,8 @@ debug_overlay={
 
 [layer_names]
 
-3d_physics/layer_1 = "player"
-3d_physics/layer_2 = "entities"
+3d_physics/layer_1="player"
+3d_physics/layer_2="entities"
 
 [physics]
 

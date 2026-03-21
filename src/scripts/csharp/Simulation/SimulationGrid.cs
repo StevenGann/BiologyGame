@@ -92,6 +92,34 @@ public class SimulationGrid
         }
     }
 
+    /// <summary>Insert one animal into the cell lists after spawn. Updates CellX/CellZ on the struct.</summary>
+    public void RegisterAnimal(int index)
+    {
+        lock (_lock)
+        {
+            if (index < 0 || index >= _animals.Length) return;
+            var pos = _animals[index].Position;
+            var (cx, cz) = CellFromWorld(pos.X, pos.Z);
+            _animals[index].CellX = cx;
+            _animals[index].CellZ = cz;
+            _animalCells[cx, cz].Add(index);
+        }
+    }
+
+    /// <summary>Insert one plant into the cell lists after spawn. Updates CellX/CellZ on the struct.</summary>
+    public void RegisterPlant(int index)
+    {
+        lock (_lock)
+        {
+            if (index < 0 || index >= _plants.Length) return;
+            var pos = _plants[index].Position;
+            var (cx, cz) = CellFromWorld(pos.X, pos.Z);
+            _plants[index].CellX = cx;
+            _plants[index].CellZ = cz;
+            _plantCells[cx, cz].Add(index);
+        }
+    }
+
     /// <summary>
     /// Check for boundary crosses and transfer entities. Call every M seconds.
     /// </summary>
@@ -223,16 +251,45 @@ public class SimulationGrid
     }
 
     /// <summary>
-    /// Get a snapshot of all entity positions for debug overlay.
+    /// Get a snapshot of entity positions for debug overlay.
     /// Packed as: [x, z, isAnimal(0/1), speciesId, ...] per entity.
-    /// Clears and fills the provided list. Safe to call from any thread if grid is locked externally.
+    /// When <paramref name="maxEntities"/> is finite, uses uniform index strides so cost stays bounded (overlay only draws ~1.5k dots).
     /// </summary>
-    public void GetSnapshot(List<float> outBuffer)
+    public void GetSnapshot(List<float> outBuffer, int maxEntities = int.MaxValue)
     {
         outBuffer.Clear();
         lock (_lock)
         {
-            for (var i = 0; i < _animalCount; i++)
+            var ac = _animalCount;
+            var pc = _plantCount;
+            if (maxEntities == int.MaxValue || ac + pc <= maxEntities)
+            {
+                for (var i = 0; i < ac; i++)
+                {
+                    var p = _animals[i].Position;
+                    outBuffer.Add(p.X);
+                    outBuffer.Add(p.Z);
+                    outBuffer.Add(1f);
+                    outBuffer.Add((float)_animals[i].SpeciesId);
+                }
+                for (var i = 0; i < pc; i++)
+                {
+                    if (_plants[i].IsConsumed) continue;
+                    var p = _plants[i].Position;
+                    outBuffer.Add(p.X);
+                    outBuffer.Add(p.Z);
+                    outBuffer.Add(0f);
+                    outBuffer.Add((float)_plants[i].SpeciesId);
+                }
+                return;
+            }
+
+            var animalBudget = Mathf.Max(1, maxEntities / 2);
+            var plantBudget = Mathf.Max(1, maxEntities - animalBudget);
+            var animalStep = SnapshotStride(ac, animalBudget);
+            var plantStep = SnapshotStride(pc, plantBudget);
+
+            for (var i = 0; i < ac; i += animalStep)
             {
                 var p = _animals[i].Position;
                 outBuffer.Add(p.X);
@@ -240,7 +297,7 @@ public class SimulationGrid
                 outBuffer.Add(1f);
                 outBuffer.Add((float)_animals[i].SpeciesId);
             }
-            for (var i = 0; i < _plantCount; i++)
+            for (var i = 0; i < pc; i += plantStep)
             {
                 if (_plants[i].IsConsumed) continue;
                 var p = _plants[i].Position;
@@ -250,6 +307,13 @@ public class SimulationGrid
                 outBuffer.Add((float)_plants[i].SpeciesId);
             }
         }
+    }
+
+    private static int SnapshotStride(int total, int maxSamples)
+    {
+        if (total <= 0 || maxSamples <= 0) return 1;
+        if (total <= maxSamples) return 1;
+        return (total + maxSamples - 1) / maxSamples;
     }
 
     /// <summary>Fill outIndices with animal indices in the given cell. Clears list first.</summary>

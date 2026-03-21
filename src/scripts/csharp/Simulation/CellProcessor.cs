@@ -13,9 +13,9 @@ public class CellProcessor
 {
     private readonly SimulationGrid _grid;
     private readonly AnimalStateData[] _animals;
-    private readonly int _animalCount;
+    private int _animalCount;
     private readonly PlantStateData[] _plants;
-    private readonly int _plantCount;
+    private int _plantCount;
 
     private Vector3 _playerPosition;
     private int _playerCellX;
@@ -39,6 +39,13 @@ public class CellProcessor
         _animalCount = animalCount;
         _plants = plants ?? Array.Empty<PlantStateData>();
         _plantCount = plantCount;
+    }
+
+    /// <summary>Update how many array slots participate in simulation (e.g. population ramp). Must match grid <see cref="SimulationGrid.SetData"/> counts.</summary>
+    public void SetActiveEntityCounts(int animalCount, int plantCount)
+    {
+        _animalCount = Math.Max(0, animalCount);
+        _plantCount = Math.Max(0, plantCount);
     }
 
     /// <summary>Update player position for LOD tier computation. Call from main thread before Tick.</summary>

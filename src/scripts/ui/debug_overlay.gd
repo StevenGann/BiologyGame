@@ -23,6 +23,7 @@ var _draw_control: Control  ## Inner Control in SubViewport that performs _draw
 func _ready() -> void:
 	process_mode = Node.PROCESS_MODE_ALWAYS
 	visible = false
+	add_to_group("debug_overlay")
 
 	_bridge = get_tree().get_first_node_in_group("sim_bridge")
 	_player = get_tree().get_first_node_in_group("player") as Node3D
@@ -85,3 +86,11 @@ func _update_draw_control() -> void:
 	_draw_control.set_meta("max_dots_to_draw", max_dots_to_draw)
 	var grid_n: int = 16 if internal_resolution <= 128 else 32
 	_draw_control.set_meta("grid_n", grid_n)
+	if _bridge and _bridge.has_method("GetDebugMapWorldOriginX"):
+		_draw_control.set_meta("world_origin_x", float(_bridge.call("GetDebugMapWorldOriginX")))
+		_draw_control.set_meta("world_origin_z", float(_bridge.call("GetDebugMapWorldOriginZ")))
+		_draw_control.set_meta("world_size_xz", float(_bridge.call("GetDebugMapWorldSizeXZ")))
+	else:
+		_draw_control.set_meta("world_origin_x", -4096.0)
+		_draw_control.set_meta("world_origin_z", -4096.0)
+		_draw_control.set_meta("world_size_xz", 8192.0)

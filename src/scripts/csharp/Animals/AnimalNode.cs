@@ -9,13 +9,6 @@ namespace BiologyGame.Animals;
 /// </summary>
 public partial class AnimalNode : Node3D
 {
-    private MeshInstance3D _meshInstance;
-
-    public override void _Ready()
-    {
-        _meshInstance = GetNodeOrNull<MeshInstance3D>("MeshInstance3D");
-    }
-
     /// <summary>
     /// Apply simulation state for display. Call from SimSyncBridge each sync.
     /// </summary>

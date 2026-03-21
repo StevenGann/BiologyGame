@@ -1,3 +1,4 @@
+using System;
 using Godot;
 using Xunit;
 using BiologyGame.Simulation;
@@ -27,8 +28,10 @@ public class WorldPopulatorTests
         var herb = AnimalSpeciesConfig.CreateHerbivore(0);
         var pred = AnimalSpeciesConfig.CreatePredator(1);
 
-        WorldPopulator.Populate(animals1, 10, plants1, 5, config, herb, pred);
-        WorldPopulator.Populate(animals2, 10, plants2, 5, config, herb, pred);
+        var rng1 = new Random(42);
+        WorldPopulator.Populate(animals1, 10, plants1, 5, config, herb, pred, ref rng1);
+        var rng2 = new Random(42);
+        WorldPopulator.Populate(animals2, 10, plants2, 5, config, herb, pred, ref rng2);
 
         Assert.Equal(animals1[0].Position.X, animals2[0].Position.X);
         Assert.Equal(animals1[0].Position.Z, animals2[0].Position.Z);
@@ -54,7 +57,8 @@ public class WorldPopulatorTests
         var herb = AnimalSpeciesConfig.CreateHerbivore(0);
         var pred = AnimalSpeciesConfig.CreatePredator(1);
 
-        WorldPopulator.Populate(animals, 100, plants, 10, config, herb, pred);
+        var rng = new Random(123);
+        WorldPopulator.Populate(animals, 100, plants, 10, config, herb, pred, ref rng);
 
         var herbivoreCount = 0;
         for (var i = 0; i < 100; i++)
@@ -82,7 +86,8 @@ public class WorldPopulatorTests
         var herb = AnimalSpeciesConfig.CreateHerbivore(0);
         var pred = AnimalSpeciesConfig.CreatePredator(1);
 
-        WorldPopulator.Populate(animals, 50, plants, 20, config, herb, pred);
+        var rng = new Random(777);
+        WorldPopulator.Populate(animals, 50, plants, 20, config, herb, pred, ref rng);
 
         var minX = float.MaxValue;
         var maxX = float.MinValue;
@@ -118,7 +123,8 @@ public class WorldPopulatorTests
         var herb = AnimalSpeciesConfig.CreateHerbivore(0);
         var pred = AnimalSpeciesConfig.CreatePredator(1);
 
-        WorldPopulator.Populate(animals, 20, plants, 5, config, herb, pred);
+        var rng = new Random(999);
+        WorldPopulator.Populate(animals, 20, plants, 5, config, herb, pred, ref rng);
 
         for (var i = 0; i < 20; i++)
         {

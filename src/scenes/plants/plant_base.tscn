@@ -1,27 +1,9 @@
-[gd_scene load_steps=5 format=3 uid="uid://bxy7plant001"]
+[gd_scene load_steps=2 format=3 uid="uid://bxy7plant001"]
 
 [ext_resource type="Script" path="res://scripts/csharp/Plants/PlantNode.cs" id="1_script"]
-
-[sub_resource type="CylinderMesh" id="CylinderMesh_plant"]
-top_radius = 0.15
-bottom_radius = 0.2
-height = 0.8
-
-[sub_resource type="CylinderShape3D" id="CylinderShape3D_plant"]
-height = 0.8
-radius = 0.2
+[ext_resource type="PackedScene" uid="uid://bp60rkgglhuf4" path="res://assets/models/placeholders/plants/grass-large.glb" id="2_model"]
 
 [node name="PlantBase" type="Node3D" groups=["plants"]]
 script = ExtResource("1_script")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
-mesh = SubResource("CylinderMesh_plant")
-
-[node name="StaticBody3D" type="StaticBody3D" parent="."]
-collision_layer = 2
-collision_mask = 0
-
-[node name="CollisionShape3D" type="CollisionShape3D" parent="StaticBody3D"]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
-shape = SubResource("CylinderShape3D_plant")
+[node name="Model" parent="." instance=ExtResource("2_model")]

@@ -1,13 +1,10 @@
-[gd_scene load_steps=3 format=3 uid="uid://bxy7animal001"]
+[gd_scene load_steps=2 format=3 uid="uid://bxy7animal001"]
 
 [ext_resource type="Script" path="res://scripts/csharp/Animals/AnimalNode.cs" id="1_script"]
-
-[sub_resource type="BoxMesh" id="BoxMesh_animal"]
-size = Vector3(0.6, 0.8, 1.2)
+[ext_resource type="PackedScene" uid="uid://7tt6qdp4ovx5" path="res://assets/models/placeholders/animals/animal-bison.glb" id="2_model"]
 
 [node name="AnimalBase" type="Node3D" groups=["animals"]]
 script = ExtResource("1_script")
 
-[node name="MeshInstance3D" type="MeshInstance3D" parent="."]
-transform = Transform3D(1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0.4, 0)
-mesh = SubResource("BoxMesh_animal")
+[node name="Model" parent="." instance=ExtResource("2_model")]
+transform = Transform3D(0, 0, -2, 0, 2, 0, 2, 0, 0, 0, 0, 0)
